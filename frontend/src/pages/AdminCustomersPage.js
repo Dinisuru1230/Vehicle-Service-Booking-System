@@ -995,15 +995,6 @@ const AdminCustomersPage = ({
           <div className="topbar-actions-cluster">
             <button
               type="button"
-              onClick={() => setActiveModal('add_customer')}
-              className="btn-topbar-primary"
-            >
-              <UserPlus size={16} />
-              <span>Add Customer</span>
-            </button>
-
-            <button
-              type="button"
               onClick={onNavigateHome}
               className="btn-client-view"
             >
@@ -1391,7 +1382,7 @@ const AdminCustomersPage = ({
                         <td>
                           <div className="customer-spend-cell">
                             <span className="spend-number">
-                              ${cust.lifetimeSpend.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              LKR {cust.lifetimeSpend.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                             </span>
                             <span className="spend-label">Lifetime Value</span>
                           </div>
@@ -1533,7 +1524,7 @@ const AdminCustomersPage = ({
                   <div className="card-footer-strip">
                     <div className="footer-metric">
                       <span className="footer-metric-val">
-                        ${cust.lifetimeSpend.toLocaleString('en-US', { minimumFractionDigits: 0 })}
+                        LKR {cust.lifetimeSpend.toLocaleString('en-US', { minimumFractionDigits: 0 })}
                       </span>
                       <span className="footer-metric-lbl">Total Spend</span>
                     </div>
@@ -1609,8 +1600,8 @@ const AdminCustomersPage = ({
           MODAL 1: CUSTOMER DETAILS & GARAGE DRAWER
           ======================================================== */}
       {selectedCustomer && (
-        <div className="admin-modal-overlay">
-          <div className="admin-modal-card modal-large-details">
+        <div className="admin-modal-overlay" onClick={() => setSelectedCustomer(null)}>
+          <div className="admin-modal-card modal-large-details" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
               <div className="modal-customer-header-left">
                 <div className={`customer-avatar-large ${selectedCustomer.avatarBg}`}>
@@ -1789,7 +1780,7 @@ const AdminCustomersPage = ({
 
                           <div className="history-footer-row">
                             <div className="history-cost-tag">
-                              Invoice: <strong>${item.cost.toFixed(2)}</strong>
+                              Invoice: <strong>LKR {item.cost.toFixed(2)}</strong>
                             </div>
 
                             <button
@@ -1824,7 +1815,7 @@ const AdminCustomersPage = ({
                     <div className="summary-pill">
                       <span className="lbl">Total Workshop Spend:</span>
                       <span className="val text-blue">
-                        ${selectedCustomer.lifetimeSpend.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        LKR {selectedCustomer.lifetimeSpend.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </span>
                     </div>
 
@@ -1866,8 +1857,8 @@ const AdminCustomersPage = ({
           MODAL 2: ADD NEW CUSTOMER MODAL
           ======================================================== */}
       {activeModal === 'add_customer' && (
-        <div className="admin-modal-overlay">
-          <div className="admin-modal-card modal-standard-form">
+        <div className="admin-modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="admin-modal-card modal-standard-form" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
               <div>
                 <h2 className="modal-title-bold">Register New Customer</h2>
@@ -2048,8 +2039,8 @@ const AdminCustomersPage = ({
           MODAL 3: ADD VEHICLE TO GARAGE MODAL
           ======================================================== */}
       {activeModal === 'add_vehicle' && selectedCustomer && (
-        <div className="admin-modal-overlay">
-          <div className="admin-modal-card modal-standard-form">
+        <div className="admin-modal-overlay" onClick={() => setActiveModal(null)}>
+          <div className="admin-modal-card modal-standard-form" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header-row">
               <div>
                 <h2 className="modal-title-bold">Add Vehicle to Garage</h2>

@@ -73,12 +73,14 @@ const RegisterPage = ({ onNavigateToLogin, onNavigateHome, onNavigateProfile }) 
       });
 
       setTimeout(() => {
-        if (onNavigateProfile) {
+        if (onNavigateHome) {
+          onNavigateHome();
+        } else if (onNavigateProfile) {
           onNavigateProfile();
         } else if (onNavigateToLogin) {
           onNavigateToLogin();
         }
-      }, 900);
+      }, 700);
     } catch (err) {
       setIsLoading(false);
       setStatusMessage({
@@ -97,7 +99,12 @@ const RegisterPage = ({ onNavigateToLogin, onNavigateHome, onNavigateProfile }) 
 
           {/* Top Bar: Brand & Live Bay Status */}
           <div className="hero-header-bar">
-            <div className="brand-lockup">
+            <div
+              className="brand-lockup"
+              onClick={onNavigateHome}
+              style={{ cursor: onNavigateHome ? 'pointer' : 'default' }}
+              title="Return to Landing Page"
+            >
               <div className="brand-logo-glass">
                 <Gauge size={22} className="brand-gauge-icon" />
               </div>

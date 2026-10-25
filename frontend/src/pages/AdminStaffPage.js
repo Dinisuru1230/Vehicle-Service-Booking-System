@@ -666,11 +666,11 @@ const AdminStaffPage = ({
           <div className="topbar-actions-cluster">
             <button
               type="button"
-              onClick={() => setModalOpen(true)}
-              className="btn-topbar-primary"
+              onClick={onNavigateHome}
+              className="btn-client-view"
             >
-              <UserPlus size={16} />
-              <span>Add Technician</span>
+              <ExternalLink size={14} />
+              <span>Client Site</span>
             </button>
 
             <button

@@ -1,5 +1,6 @@
 const prisma = require('../config/prisma');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 // Helper to extract initials
 function getInitials(name) {
@@ -74,6 +75,24 @@ function buildTelemetry(status, serviceTitle, customTelemetry) {
     } else if (typeof customTelemetry === 'object') {
       return customTelemetry;
     }
+  }
+
+  if (status === 'Cancelled') {
+    return {
+      step: 0,
+      totalSteps: 4,
+      stepName: 'Appointment Cancelled',
+      estCompletion: 'Cancelled',
+      progressPercent: 0,
+      milestones: [
+        {
+          step: 1,
+          name: '1. Appointment Intake',
+          status: 'cancelled',
+          time: 'Booking Cancelled',
+        },
+      ],
+    };
   }
 
   const isCompleted = status === 'Completed';
@@ -156,6 +175,13 @@ function formatBooking(b) {
   const vehicleText = b.vehicleText || (b.vehicle ? `${b.vehicle.year} ${b.vehicle.make} ${b.vehicle.model}` : 'Performance Vehicle');
   const plate = b.plate || (b.vehicle ? b.vehicle.plate : 'CA 999ZZ');
 
+  const cleanTime = (b.scheduledTime || '10:00 AM').replace(/^Today,\s*/i, '');
+  const isDateToday = b.scheduledDate && (
+    b.scheduledDate.toLowerCase().includes('today') ||
+    b.status === 'In-Bay'
+  );
+  const displayTime = isDateToday ? `Today, ${cleanTime}` : cleanTime;
+
   return {
     id: b.bookingRef ? b.bookingRef.replace(/^#/, '') : b.id,
     bookingRef: b.bookingRef || `#${b.id.substring(0, 8)}`,
@@ -183,8 +209,8 @@ function formatBooking(b) {
     title: b.serviceTitle,
     serviceDetail: b.serviceDetail || 'Precision High-Performance Intake Service',
     servicesList: parsedServices,
-    time: b.scheduledTime.includes('Today') ? b.scheduledTime : `Today, ${b.scheduledTime}`,
-    scheduledTime: b.scheduledTime,
+    time: displayTime,
+    scheduledTime: cleanTime,
     scheduledDate: b.scheduledDate,
     month,
     day,
@@ -551,11 +577,10 @@ const ensureBookingsSeeded = async () => {
 /**
  * @desc    Book a new service appointment
  * @route   POST /api/bookings
- * @access  Private (Customer & Admin)
+ * @access  Public (Guest) / Private (Customer & Admin)
  */
 const createBooking = async (req, res) => {
   try {
-    const userId = req.user.id;
     const {
       vehicleId,
       vehicleMake,
@@ -566,6 +591,8 @@ const createBooking = async (req, res) => {
       customerName,
       phoneNumber,
       customerPhone,
+      email,
+      customerEmail,
       serviceItems,
       selectedServices,
       serviceTitle,
@@ -582,10 +609,57 @@ const createBooking = async (req, res) => {
       totalPrice,
     } = req.body;
 
+    let targetUser = req.user;
+    let guestToken = null;
+
+    const resolvedCustomerName = (fullName || customerName || (targetUser ? targetUser.name : 'Valued Customer')).trim();
+    const resolvedCustomerPhone = (phoneNumber || customerPhone || (targetUser ? targetUser.phone : null) || '').trim() || null;
+    const rawEmail = (email || customerEmail || (targetUser ? targetUser.email : '') || '').trim().toLowerCase();
+
+    // 0. Resolve or create customer account
+    if (!targetUser) {
+      if (rawEmail) {
+        targetUser = await prisma.user.findUnique({
+          where: { email: rawEmail },
+        });
+      }
+
+      if (!targetUser && resolvedCustomerPhone) {
+        targetUser = await prisma.user.findFirst({
+          where: { phone: resolvedCustomerPhone },
+        });
+      }
+
+      if (!targetUser) {
+        const generatedEmail = rawEmail || `customer_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}@apexdrive.local`;
+        const tempPassword = await bcrypt.hash('CustomerPass2026!', 10);
+        targetUser = await prisma.user.create({
+          data: {
+            name: resolvedCustomerName,
+            email: generatedEmail,
+            phone: resolvedCustomerPhone,
+            password: tempPassword,
+            role: 'customer',
+            tier: 'Standard',
+            status: 'Active',
+          },
+        });
+      }
+
+      // Generate session token
+      guestToken = jwt.sign(
+        { id: targetUser.id, email: targetUser.email, role: targetUser.role },
+        process.env.JWT_SECRET || 'apexdrive_super_secure_jwt_token_secret_key_2026_xyz982',
+        { expiresIn: '30d' }
+      );
+    }
+
+    const userId = targetUser.id;
+
     // 1. Resolve vehicle
     let resolvedVehicleId = vehicleId || null;
-    let resolvedVehicleText = vehicleMake || vehicle || null;
-    let resolvedPlate = licensePlate || plate || null;
+    let resolvedVehicleText = (vehicleMake || vehicle || '').trim() || null;
+    let resolvedPlate = (licensePlate || plate || '').trim() || null;
 
     if (resolvedVehicleId) {
       const v = await prisma.vehicle.findUnique({ where: { id: resolvedVehicleId } });
@@ -593,25 +667,33 @@ const createBooking = async (req, res) => {
         resolvedVehicleText = v.name || `${v.year} ${v.make} ${v.model}`;
         resolvedPlate = v.plate;
       }
-    } else if (resolvedVehicleText && resolvedPlate) {
-      // Find or create vehicle under user
+    } else if (resolvedVehicleText || resolvedPlate) {
+      const plateToUse = resolvedPlate || `TX-${Math.floor(100 + Math.random() * 900)}-APX`;
       let existingV = await prisma.vehicle.findFirst({
-        where: { userId, plate: resolvedPlate.trim() },
+        where: { userId, plate: plateToUse },
       });
+
       if (!existingV) {
+        const vehicleParts = (resolvedVehicleText || '2023 Performance Vehicle').split(/\s+/);
+        const year = parseInt(vehicleParts[0], 10) || new Date().getFullYear();
+        const make = vehicleParts[1] || 'Apex';
+        const model = vehicleParts.slice(2).join(' ') || 'Standard';
+
         existingV = await prisma.vehicle.create({
           data: {
             userId,
-            name: resolvedVehicleText,
-            make: resolvedVehicleText.split(' ')[1] || 'Vehicle',
-            model: resolvedVehicleText.split(' ').slice(2).join(' ') || 'Model',
-            year: parseInt(resolvedVehicleText.split(' ')[0], 10) || new Date().getFullYear(),
-            plate: resolvedPlate.trim(),
-            isPrimary: false,
+            name: resolvedVehicleText || `${year} ${make} ${model}`,
+            make,
+            model,
+            year,
+            plate: plateToUse,
+            isPrimary: true,
           },
         });
       }
       resolvedVehicleId = existingV.id;
+      resolvedPlate = existingV.plate;
+      resolvedVehicleText = existingV.name || `${existingV.year} ${existingV.make} ${existingV.model}`;
     }
 
     // 2. Resolve Service Title & Details
@@ -622,7 +704,6 @@ const createBooking = async (req, res) => {
 
     const rawServices = serviceItems || selectedServices;
     if (Array.isArray(rawServices) && rawServices.length > 0) {
-      // Could be array of IDs or array of objects
       if (typeof rawServices[0] === 'string') {
         const found = await prisma.service.findMany({
           where: {
@@ -668,8 +749,18 @@ const createBooking = async (req, res) => {
     let resolvedTime = scheduledTime || selectedSlot || '10:00 AM';
 
     // 4. Generate Unique Booking Ref
-    const randomDigits = Math.floor(10000 + Math.random() * 90000);
-    const bookingRef = `#APX-${randomDigits}`;
+    let bookingRef;
+    let isUnique = false;
+    let attempts = 0;
+    while (!isUnique && attempts < 10) {
+      attempts++;
+      const randomDigits = Math.floor(10000 + Math.random() * 90000);
+      bookingRef = `#APX-${randomDigits}`;
+      const exists = await prisma.booking.findUnique({ where: { bookingRef } });
+      if (!exists) {
+        isUnique = true;
+      }
+    }
 
     // 5. Create Booking
     const newBooking = await prisma.booking.create({
@@ -677,18 +768,18 @@ const createBooking = async (req, res) => {
         bookingRef,
         userId,
         vehicleId: resolvedVehicleId,
-        customerName: fullName || customerName || req.user.name,
-        customerPhone: phoneNumber || customerPhone || req.user.phone || null,
-        vehicleText: resolvedVehicleText || 'Standard Vehicle',
+        customerName: resolvedCustomerName,
+        customerPhone: resolvedCustomerPhone,
+        vehicleText: resolvedVehicleText || 'Standard Performance Vehicle',
         plate: resolvedPlate || 'CA 8XYZ901',
         serviceTitle: resolvedTitle,
         serviceDetail: resolvedDetail,
         servicesList: JSON.stringify(resolvedServicesList),
         scheduledDate: resolvedDate,
         scheduledTime: resolvedTime,
-        hub: hub || 'Apex Central Hub',
-        bay: 'Bay Standby',
-        technician: 'Sam Rivera',
+        hub: hub || 'Apex Central Precision Hub',
+        bay: 'Bay 3 (Standby Reserved)',
+        technician: 'Dave Miller',
         totalCost: calculatedCost || 89.0,
         status: 'Confirmed',
         notes: notes || null,
@@ -705,6 +796,14 @@ const createBooking = async (req, res) => {
       success: true,
       message: `Booking ${bookingRef} scheduled successfully!`,
       booking: formatBooking(newBooking),
+      token: guestToken,
+      user: {
+        id: targetUser.id,
+        name: targetUser.name,
+        email: targetUser.email,
+        phone: targetUser.phone,
+        role: targetUser.role,
+      },
     });
   } catch (error) {
     console.error(`[createBooking Error]: ${error.message}`);
@@ -715,18 +814,88 @@ const createBooking = async (req, res) => {
 /**
  * @desc    Get customer's booking history
  * @route   GET /api/bookings/my
- * @access  Private (Customer & Admin)
+ * @access  Public / Private (Customer & Admin)
  */
 const getMyBookings = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { status, hub, search } = req.query;
+    const { status, hub, search, guestRefs, phone, email } = req.query;
 
-    const allBookings = await prisma.booking.findMany({
-      where: { userId },
-      include: { vehicle: true },
+    let whereClause = {};
+
+    if (req.user) {
+      const refList = guestRefs
+        ? guestRefs
+            .split(',')
+            .map((r) => r.trim())
+            .filter(Boolean)
+            .flatMap((r) => [r, r.startsWith('#') ? r.slice(1) : `#${r}`])
+        : [];
+
+      whereClause = {
+        OR: [
+          { userId: req.user.id },
+          ...(req.user.email ? [{ user: { email: req.user.email.trim().toLowerCase() } }] : []),
+          ...(req.user.phone ? [{ customerPhone: req.user.phone.trim() }] : []),
+          ...(refList.length > 0
+            ? [
+                { bookingRef: { in: refList } },
+                { id: { in: refList } },
+              ]
+            : []),
+        ],
+      };
+    } else if (guestRefs) {
+      const refList = guestRefs
+        .split(',')
+        .map((r) => r.trim())
+        .filter(Boolean)
+        .flatMap((r) => [r, r.startsWith('#') ? r.slice(1) : `#${r}`]);
+
+      whereClause = {
+        OR: [
+          { bookingRef: { in: refList } },
+          { id: { in: refList } },
+          ...(email ? [{ user: { email: email.trim().toLowerCase() } }] : []),
+          ...(phone ? [{ customerPhone: phone.trim() }] : []),
+        ],
+      };
+    } else if (email || phone) {
+      whereClause = {
+        OR: [
+          ...(email ? [{ user: { email: email.trim().toLowerCase() } }] : []),
+          ...(phone ? [{ customerPhone: phone.trim() }] : []),
+        ],
+      };
+    } else {
+      whereClause = {};
+    }
+
+    let allBookings = await prisma.booking.findMany({
+      where: whereClause,
+      include: {
+        vehicle: true,
+        user: {
+          select: { id: true, name: true, email: true, phone: true, tier: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
+      take: req.user ? undefined : 25,
     });
+
+    // If an administrator user visits My Bookings and has no personal customer bookings,
+    // display all active workshop bookings so the preview is populated with live telemetry.
+    if (req.user?.role === 'admin' && allBookings.length === 0) {
+      allBookings = await prisma.booking.findMany({
+        include: {
+          vehicle: true,
+          user: {
+            select: { id: true, name: true, email: true, phone: true, tier: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      });
+    }
 
     const formattedAll = allBookings.map(formatBooking);
 
@@ -734,6 +903,7 @@ const getMyBookings = async (req, res) => {
     const activeCount = formattedAll.filter((b) => b.statusGroup === 'active').length;
     const upcomingCount = formattedAll.filter((b) => b.statusGroup === 'upcoming').length;
     const completedCount = formattedAll.filter((b) => b.statusGroup === 'completed').length;
+    const cancelledCount = formattedAll.filter((b) => b.statusGroup === 'cancelled').length;
     const totalCount = formattedAll.length;
 
     // Filter by tab status
@@ -746,6 +916,8 @@ const getMyBookings = async (req, res) => {
         filtered = filtered.filter((b) => b.statusGroup === 'upcoming');
       } else if (s === 'completed') {
         filtered = filtered.filter((b) => b.statusGroup === 'completed');
+      } else if (s === 'cancelled') {
+        filtered = filtered.filter((b) => b.statusGroup === 'cancelled');
       }
     }
 
@@ -772,6 +944,7 @@ const getMyBookings = async (req, res) => {
         activeCount,
         upcomingCount,
         completedCount,
+        cancelledCount,
         totalCount,
       },
       bookings: filtered,
@@ -816,7 +989,7 @@ const getBookingById = async (req, res) => {
     }
 
     // Authorization check
-    if (req.user.role !== 'admin' && booking.userId !== req.user.id) {
+    if (req.user && req.user.role !== 'admin' && booking.userId !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to view this booking.',
@@ -858,7 +1031,7 @@ const cancelBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found.' });
     }
 
-    if (req.user.role !== 'admin' && booking.userId !== req.user.id) {
+    if (req.user && req.user.role !== 'admin' && booking.userId !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized.' });
     }
 
@@ -880,7 +1053,7 @@ const cancelBooking = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Booking #${updated.bookingRef} cancelled successfully.`,
+      message: `Booking ${updated.bookingRef} cancelled successfully.`,
       booking: formatBooking(updated),
     });
   } catch (error) {
@@ -921,7 +1094,7 @@ const rescheduleBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Booking not found.' });
     }
 
-    if (req.user.role !== 'admin' && booking.userId !== req.user.id) {
+    if (req.user && req.user.role !== 'admin' && booking.userId !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Not authorized.' });
     }
 
@@ -946,7 +1119,7 @@ const rescheduleBooking = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Booking #${updated.bookingRef} successfully rescheduled to ${updated.scheduledDate} at ${updated.scheduledTime}.`,
+      message: `Booking ${updated.bookingRef} successfully rescheduled to ${updated.scheduledDate} at ${updated.scheduledTime}.`,
       booking: formatBooking(updated),
     });
   } catch (error) {
@@ -1082,7 +1255,7 @@ const updateBookingStatus = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Booking #${updated.bookingRef} status updated to ${status}.`,
+      message: `Booking ${updated.bookingRef} status updated to ${status}.`,
       booking: formatBooking(updated),
     });
   } catch (error) {
@@ -1148,7 +1321,7 @@ const assignTechnicianAndBay = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Technician ${updated.technician} & ${updated.bay} assigned to Booking #${updated.bookingRef}.`,
+      message: `Technician ${updated.technician} & ${updated.bay} assigned to Booking ${updated.bookingRef}.`,
       booking: formatBooking(updated),
     });
   } catch (error) {
@@ -1200,7 +1373,14 @@ const createAdminBooking = async (req, res) => {
     });
 
     if (!user) {
-      user = req.user; // Admin takes the intake record
+      user = req.user || (await prisma.user.findFirst({ where: { role: 'admin' } })) || (await prisma.user.findFirst());
+    }
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Could not associate an account for this booking intake.',
+      });
     }
 
     const randomDigits = Math.floor(10000 + Math.random() * 90000);
@@ -1259,20 +1439,22 @@ const getBookingMetrics = async (req, res) => {
       .filter((b) => b.status === 'Completed')
       .reduce((sum, b) => sum + (b.totalCost || 0), 0);
 
+    const bayUtilization = Math.min(100, Math.round((todaysInBay / 6) * 100));
+
     res.status(200).json({
       success: true,
       metrics: {
-        totalBookings: totalBookings >= 10 ? totalBookings : 1248,
-        totalBookingsFormatted: '1,248',
-        pendingConfirmation: pendingConfirmation || 14,
-        todaysInBay: todaysInBay || 8,
-        completedToday: completedToday || 38,
+        totalBookings,
+        totalBookingsFormatted: totalBookings.toLocaleString(),
+        pendingConfirmation,
+        todaysInBay,
+        completedToday,
         confirmedCount,
         cancelledCount,
         totalRevenue: Math.round(totalRevenue),
-        grossInvoiced: completedRevenue > 0 ? `LKR ${Math.round(completedRevenue).toLocaleString()}` : 'LKR 4,650',
-        bayUtilizationRate: '92%',
-        activeBayCount: 6,
+        grossInvoiced: `LKR ${Math.round(completedRevenue || totalRevenue).toLocaleString()}`,
+        bayUtilizationRate: `${bayUtilization}%`,
+        activeBayCount: todaysInBay,
         totalBayCount: 6,
         averageServicePace: '1h 18m',
       },

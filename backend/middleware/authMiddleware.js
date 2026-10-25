@@ -89,4 +89,50 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { protect, authorize };
+// Optional protect - if Bearer token is provided and valid, attach req.user; otherwise proceed as guest
+const optionalProtect = async (req, res, next) => {
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    try {
+      const token = req.headers.authorization.split(' ')[1];
+      if (token && token !== 'null' && token !== 'undefined') {
+        const decoded = jwt.verify(
+          token,
+          process.env.JWT_SECRET || 'apexdrive_super_secure_jwt_token_secret_key_2026_xyz982'
+        );
+
+        const user = await prisma.user.findUnique({
+          where: { id: decoded.id },
+          select: {
+            id: true,
+            name: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            role: true,
+            city: true,
+            state: true,
+            address: true,
+            zip: true,
+            avatar: true,
+            tier: true,
+            status: true,
+          },
+        });
+
+        if (user) {
+          req.user = user;
+        }
+      }
+    } catch (error) {
+      console.warn('[OptionalAuth] Token verification bypassed, continuing as guest:', error.message);
+    }
+  }
+  next();
+};
+
+module.exports = { protect, authorize, optionalProtect };
+

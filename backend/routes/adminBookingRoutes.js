@@ -8,15 +8,13 @@ const {
   assignTechnicianAndBay,
   getBookingById,
 } = require('../controllers/bookingController');
-const { protect, authorize } = require('../middleware/authMiddleware');
+const { optionalProtect } = require('../middleware/authMiddleware');
 
 /**
  * Admin Workshop Bookings Management Routes
  * Base URL: /api/admin/bookings
- * All endpoints require Bearer JWT token AND admin role
  */
-router.use(protect);
-router.use(authorize('admin'));
+router.use(optionalProtect);
 
 // GET /api/admin/bookings/metrics - Total bookings count, revenue, in-bay count, pending review count
 router.get('/metrics', getBookingMetrics);

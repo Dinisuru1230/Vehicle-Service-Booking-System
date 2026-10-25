@@ -62,10 +62,10 @@ const LoginPage = ({
             onNavigateHome();
           }
         } else {
-          if (onNavigateProfile) {
-            onNavigateProfile();
-          } else if (onNavigateHome) {
+          if (onNavigateHome) {
             onNavigateHome();
+          } else if (onNavigateProfile) {
+            onNavigateProfile();
           }
         }
       }, 500);
@@ -87,7 +87,12 @@ const LoginPage = ({
 
           {/* Top Bar: Brand & Live Bay Status */}
           <div className="hero-header-bar">
-            <div className="brand-lockup">
+            <div
+              className="brand-lockup"
+              onClick={onNavigateHome}
+              style={{ cursor: onNavigateHome ? 'pointer' : 'default' }}
+              title="Return to Landing Page"
+            >
               <div className="brand-logo-glass">
                 <Gauge size={22} className="brand-gauge-icon" />
               </div>

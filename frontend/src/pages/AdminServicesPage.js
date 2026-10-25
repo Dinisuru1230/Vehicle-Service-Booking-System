@@ -565,11 +565,11 @@ const AdminServicesPage = ({
           <div className="topbar-actions-cluster">
             <button
               type="button"
-              onClick={() => setModalOpen(true)}
-              className="btn-topbar-primary"
+              onClick={onNavigateHome}
+              className="btn-client-view"
             >
-              <Plus size={16} />
-              <span>Add Service</span>
+              <ExternalLink size={14} />
+              <span>Client Site</span>
             </button>
 
             <button
@@ -619,7 +619,7 @@ const AdminServicesPage = ({
                 className="btn-add-package-blue"
               >
                 <Plus size={16} />
-                <span>Add New Package</span>
+                <span>Add Service</span>
               </button>
             </div>
           </div>

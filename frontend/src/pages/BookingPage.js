@@ -175,6 +175,7 @@ const BookingPage = ({
   // Contact & Vehicle state
   const [fullName, setFullName] = useState('Marcus Vance');
   const [phoneNumber, setPhoneNumber] = useState('+1 (555) 019-2834');
+  const [email, setEmail] = useState('');
   const [vehicleMake, setVehicleMake] = useState('2023 BMW M3 Competition');
   const [licensePlate, setLicensePlate] = useState('TX-784-KPL');
   const [userVehicles, setUserVehicles] = useState([]);
@@ -253,6 +254,7 @@ const BookingPage = ({
           : user.name || '';
       if (computedName) setFullName(computedName);
       if (user.phone) setPhoneNumber(user.phone);
+      if (user.email) setEmail(user.email);
 
       const fetchUserVehicles = async () => {
         try {
@@ -432,6 +434,7 @@ const BookingPage = ({
       licensePlate,
       fullName,
       phoneNumber,
+      email,
       serviceItems: activeServicesList.map((s) => ({
         id: s.serviceCode || s.id,
         title: s.title,
@@ -444,7 +447,7 @@ const BookingPage = ({
       selectedDay,
       currentMonth,
       currentYear,
-      scheduledDate: `Tuesday, Oct ${selectedDay}, ${currentYear}`,
+      scheduledDate: `${currentMonth.substring(0, 3).toUpperCase()} ${String(selectedDay).padStart(2, '0')}, ${currentYear}`,
       selectedSlot,
       scheduledTime: selectedSlot,
       hub: 'Apex Central Precision Hub',
@@ -453,34 +456,38 @@ const BookingPage = ({
       totalPrice,
     };
 
-    if (isAuthenticated) {
-      try {
-        const res = await bookingAPI.createBooking(bookingPayload);
-        if (res && res.success && res.booking) {
-          setBookedConfirmation(res.booking);
-          setIsBooked(true);
-        } else {
-          setBookedConfirmation({
-            bookingRef: '#APX-' + Math.floor(10000 + Math.random() * 90000),
-            bay: 'Bay 03 (Precision Lift)',
-            totalCost: totalPrice,
-          });
-          setIsBooked(true);
+    try {
+      const res = await bookingAPI.createBooking(bookingPayload);
+      if (res && res.success && res.booking) {
+        setBookedConfirmation(res.booking);
+        setIsBooked(true);
+
+        try {
+          const prevGuestRefs = localStorage.getItem('apexdrive_guest_bookings') || '';
+          const refList = prevGuestRefs ? prevGuestRefs.split(',') : [];
+          if (res.booking.bookingRef && !refList.includes(res.booking.bookingRef)) {
+            refList.unshift(res.booking.bookingRef);
+            localStorage.setItem('apexdrive_guest_bookings', refList.slice(0, 10).join(','));
+          }
+          localStorage.setItem('apexdrive_latest_booking', JSON.stringify(res.booking));
+
+          // If token was returned for guest and not currently logged in, persist token & user
+          if (res.token && !localStorage.getItem('apexdrive_token')) {
+            localStorage.setItem('apexdrive_token', res.token);
+            if (res.user) {
+              localStorage.setItem('apexdrive_user', JSON.stringify(res.user));
+            }
+          }
+        } catch (storageErr) {
+          console.warn('[Booking] LocalStorage write error:', storageErr);
         }
-      } catch (err) {
-        console.error('Booking failed:', err);
-        setBookingError(err.message || 'Failed to submit appointment. Please try again.');
-      } finally {
-        setIsSubmitting(false);
+      } else {
+        throw new Error(res?.message || 'Server did not return a valid booking record.');
       }
-    } else {
-      // Guest booking mock confirmation
-      setBookedConfirmation({
-        bookingRef: '#APX-' + Math.floor(10000 + Math.random() * 90000),
-        bay: 'Bay 03 (Standby)',
-        totalCost: totalPrice,
-      });
-      setIsBooked(true);
+    } catch (err) {
+      console.error('Booking failed:', err);
+      setBookingError(err.message || 'Failed to submit appointment. Please try again.');
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -577,6 +584,17 @@ const BookingPage = ({
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     className="styled-form-input"
                     placeholder="+1 (555) 000-0000"
+                  />
+                </div>
+
+                <div className="form-input-box">
+                  <label className="input-field-label">EMAIL ADDRESS</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="styled-form-input"
+                    placeholder="e.g. customer@example.com"
                   />
                 </div>
 

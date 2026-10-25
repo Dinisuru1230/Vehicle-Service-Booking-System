@@ -37,6 +37,7 @@ const CUSTOMER_PAGES = [
 ];
 
 const ALL_VALID_PAGES = [...CUSTOMER_PAGES, ...ADMIN_PAGES];
+const PROTECTED_PAGES = [...ADMIN_PAGES, 'profile'];
 
 const getInitialPage = () => {
   try {
@@ -52,9 +53,9 @@ const getInitialPage = () => {
 
     if (isLoggedIn) {
       if (saved && saved !== 'login' && saved !== 'register') {
-        // If non-admin user somehow had an admin page saved, redirect to profile
+        // If non-admin user somehow had an admin page saved, redirect to landing
         if (saved.startsWith('admin') && !isUserAdmin) {
-          return 'profile';
+          return 'landing';
         }
         if (ALL_VALID_PAGES.includes(saved)) {
           return saved;
@@ -219,7 +220,7 @@ function App() {
           onNavigateRegister={() => navigateTo('register')}
           onNavigateHome={() => navigateTo('landing')}
           onNavigateDashboard={() => navigateTo('admin')}
-          onNavigateProfile={() => navigateTo('profile')}
+          onNavigateProfile={() => navigateTo('landing')}
         />
       )}
 
@@ -227,7 +228,7 @@ function App() {
         <RegisterPage
           onNavigateToLogin={() => navigateTo('login')}
           onNavigateHome={() => navigateTo('landing')}
-          onNavigateProfile={() => navigateTo('profile')}
+          onNavigateProfile={() => navigateTo('landing')}
         />
       )}
     </div>

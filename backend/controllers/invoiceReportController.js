@@ -32,7 +32,7 @@ const getBookingInvoice = async (req, res) => {
     }
 
     // Check permissions
-    if (req.user.role !== 'admin' && booking.userId !== req.user.id) {
+    if (req.user && req.user.role !== 'admin' && booking.userId !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'You are not authorized to view this invoice.',
