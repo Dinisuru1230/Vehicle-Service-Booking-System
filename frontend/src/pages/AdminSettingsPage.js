@@ -32,7 +32,7 @@ const defaultSettings = {
   email: 'admin@apexdrive.io',
   address: '742 Evergreen Motorway, Bay Area, CA',
   timezone: 'Pacific Standard Time (UTC-8)',
-  currency: 'USD ($) - United States Dollar',
+  currency: 'LKR (Rs.) - Sri Lankan Rupee',
 
   weekdayEnabled: true,
   weekdayHours: '08:00 AM → 06:00 PM',
@@ -450,6 +450,7 @@ const AdminSettingsPage = ({
                       }
                       className="settings-select-input"
                     >
+                      <option>LKR (Rs.) – Sri Lankan Rupee</option>
                       <option>USD ($) – United States Dollar</option>
                       <option>EUR (€) – Euro</option>
                       <option>GBP (£) – British Pound</option>

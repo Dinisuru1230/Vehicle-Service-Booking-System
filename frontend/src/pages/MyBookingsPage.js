@@ -35,7 +35,7 @@ const mockBookingsData = [
     vehicle: '2023 BMW M3 Competition',
     time: '02:00 PM EST',
     hub: 'Apex Central Hub',
-    price: '$79.00',
+    price: 'LKR 79.00',
   },
   {
     id: 'APX-85219',
@@ -48,7 +48,7 @@ const mockBookingsData = [
     vehicle: '2021 Porsche 911 GT3',
     time: '09:00 AM EST',
     hub: 'Downtown Flagship',
-    price: '$99.00',
+    price: 'LKR 99.00',
   },
   {
     id: 'APX-79102',
@@ -61,7 +61,7 @@ const mockBookingsData = [
     vehicle: '2023 BMW M3 Competition',
     technician: 'Sarah Chen',
     hub: 'Apex Central Hub',
-    price: '$89.00',
+    price: 'LKR 89.00',
   },
   {
     id: 'APX-77401',
@@ -74,7 +74,7 @@ const mockBookingsData = [
     vehicle: '2019 Audi S5 Coupe',
     location: 'Apex East Annex',
     hub: 'Apex East Annex',
-    price: '$119.00',
+    price: 'LKR 119.00',
   },
   {
     id: 'APX-84920',
@@ -87,7 +87,7 @@ const mockBookingsData = [
     vehicle: '2023 BMW M3 Competition',
     time: 'Est. 4:30 PM',
     hub: 'Apex Central Hub',
-    price: '$149.00',
+    price: 'LKR 149.00',
   },
 ];
 
@@ -96,7 +96,10 @@ const MyBookingsPage = ({
   onNavigateBook,
   onNavigateBookings,
   onNavigateAbout,
+  onNavigateProfile,
+  onNavigateAdmin,
   onNavigateLogin,
+  onNavigateRegister,
 }) => {
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,7 +141,10 @@ const MyBookingsPage = ({
         onNavigateBook={onNavigateBook}
         onNavigateBookings={onNavigateBookings}
         onNavigateAbout={onNavigateAbout}
+        onNavigateProfile={onNavigateProfile}
+        onNavigateAdmin={onNavigateAdmin}
         onNavigateLogin={onNavigateLogin}
+        onNavigateRegister={onNavigateRegister}
       />
 
       <main className="my-bookings-main-container">

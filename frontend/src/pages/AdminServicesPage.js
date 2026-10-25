@@ -655,7 +655,7 @@ const AdminServicesPage = ({
               </div>
               <div className="stat-card-info-col">
                 <span className="stat-card-label-small">AVERAGE PRICE</span>
-                <span className="stat-card-value-large">${avgPrice}</span>
+                <span className="stat-card-value-large">LKR {avgPrice}</span>
               </div>
             </div>
 
@@ -788,7 +788,7 @@ const AdminServicesPage = ({
                         {/* 4. PRICE */}
                         <td className="cell-price">
                           <span className="price-bold-amount">
-                            ${svc.price.toFixed(2)}
+                            LKR {svc.price.toFixed(2)}
                           </span>
                         </td>
 
@@ -945,7 +945,7 @@ const AdminServicesPage = ({
 
               <div className="grid-two-cols mb-3">
                 <div className="form-group">
-                  <label className="field-label">Customer Price ($ USD)</label>
+                  <label className="field-label">Customer Price (LKR)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -1060,7 +1060,7 @@ const AdminServicesPage = ({
 
               <div className="grid-two-cols mb-3">
                 <div className="form-group">
-                  <label className="field-label">Price ($ USD)</label>
+                  <label className="field-label">Price (LKR)</label>
                   <input
                     type="number"
                     step="0.01"

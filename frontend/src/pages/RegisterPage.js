@@ -12,8 +12,10 @@ import {
   ArrowRight,
   Headphones,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const RegisterPage = ({ onNavigateToLogin }) => {
+const RegisterPage = ({ onNavigateToLogin, onNavigateHome, onNavigateProfile }) => {
+  const { register } = useAuth();
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
@@ -26,7 +28,7 @@ const RegisterPage = ({ onNavigateToLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null); // { type: 'success' | 'error', text: '' }
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setStatusMessage(null);
 
@@ -46,24 +48,44 @@ const RegisterPage = ({ onNavigateToLogin }) => {
       return;
     }
 
-    if (password.length < 8) {
+    if (password.length < 6) {
       setStatusMessage({
         type: 'error',
-        text: 'Master Password must be at least 8 characters long.',
+        text: 'Master Password must be at least 6 characters long.',
       });
       return;
     }
 
     setIsLoading(true);
 
-    // Simulate registration processing
-    setTimeout(() => {
+    try {
+      const response = await register({
+        fullName,
+        email,
+        password,
+        phoneNumber,
+      });
+
       setIsLoading(false);
       setStatusMessage({
         type: 'success',
         text: 'Customer account provisioned successfully! Initializing your garage...',
       });
-    }, 1200);
+
+      setTimeout(() => {
+        if (onNavigateProfile) {
+          onNavigateProfile();
+        } else if (onNavigateToLogin) {
+          onNavigateToLogin();
+        }
+      }, 900);
+    } catch (err) {
+      setIsLoading(false);
+      setStatusMessage({
+        type: 'error',
+        text: err.message || 'Registration failed. Please check your information and try again.',
+      });
+    }
   };
 
   return (

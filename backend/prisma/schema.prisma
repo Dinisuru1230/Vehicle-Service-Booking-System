@@ -1,0 +1,164 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String    @id @default(uuid())
+  name             String
+  firstName        String?
+  lastName         String?
+  email            String    @unique
+  password         String
+  phone            String?
+  role             String    @default("customer") // "customer" | "admin" | "technician"
+  city             String    @default("San Francisco, CA")
+  state            String?   @default("CA")
+  address          String?
+  zip              String?
+  avatar           String?
+  bio              String?
+  department       String?
+  notes            String?
+  tier             String    @default("Standard") // "Standard" | "Gold Member" | "VIP Platinum" | "Corporate Fleet"
+  status           String    @default("Active")   // "Active" | "Pending" | "Inactive"
+  twoFactorEnabled Boolean   @default(false)
+  smsReminders     Boolean   @default(true)
+  emailStatus      Boolean   @default(true)
+  promotions       Boolean   @default(false)
+  lastLogin        DateTime?
+  vehicles         Vehicle[]
+  bookings         Booking[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Vehicle {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String?
+  make        String
+  model       String
+  year        Int
+  plate       String
+  vin         String?
+  mileage     String?
+  color       String?
+  isPrimary   Boolean   @default(false)
+  inBay       Boolean   @default(false)
+  lastService String?
+  bookings    Booking[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("vehicles")
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  serviceCode String   @unique
+  title       String
+  subtitle    String?
+  description String
+  category    String
+  duration    String
+  price       Float
+  badge       String?
+  image       String?
+  iconType    String?  @default("wrench")
+  tags        String?  @default("[]")
+  checklist   String?  @default("[]")
+  status      String   @default("Active") // "Active" | "Inactive"
+  isPopular   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("services")
+}
+
+model Booking {
+  id                 String   @id @default(uuid())
+  bookingRef         String   @unique
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleId          String?
+  vehicle            Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  customerName       String?
+  customerPhone      String?
+  vehicleText        String?
+  plate              String?
+  serviceTitle       String
+  serviceDetail      String?
+  servicesList       String?  @default("[]") // JSON string of [{ id, title, price, duration }]
+  scheduledDate      String
+  scheduledTime      String
+  hub                String?  @default("Apex Central Hub")
+  bay                String?  @default("Bay Standby")
+  technician         String?  @default("Unassigned")
+  technicianId       String?
+  totalCost          Float    @default(0.0)
+  status             String   @default("Pending") // "Pending" | "Confirmed" | "In-Bay" | "Completed" | "Cancelled"
+  notes              String?
+  cancellationReason String?
+  telemetry          String?  // JSON string containing telemetry and milestone steps
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("bookings")
+}
+
+model Staff {
+  id             String   @id @default(uuid())
+  staffCode      String   @unique
+  name           String
+  email          String   @unique
+  phone          String?  @default("+1 (555) 019-2834")
+  role           String   @default("Lead Master Technician")
+  specialization String   @default("General Maintenance")
+  bay            String   @default("Bay Standby")
+  baySub         String?  @default("(General Lift)")
+  status         String   @default("Available") // "In-Bay" | "Available" | "Scheduled" | "Off-Duty" | "On Leave"
+  vehicleText    String?  @default("Available for Dispatch")
+  vehicleIcon    String?  @default("check")
+  certs          String?  @default("[]") // JSON string of [{ name, color }]
+  experience     String?  @default("5+ years")
+  efficiency     Int      @default(96)
+  avatarBg       String?  @default("avatar-blue")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("staff")
+}
+
+model WorkshopSettings {
+  id                 String   @id @default("default-settings")
+  workshopName       String   @default("ApexDrive Precision Service Hub")
+  phone              String   @default("1-800-APEX-CAR")
+  email              String   @default("admin@apexdrive.io")
+  address            String   @default("742 Evergreen Motorway, Bay Area, CA")
+  timezone           String   @default("Pacific Standard Time (UTC-8)")
+  currency           String   @default("USD ($) - United States Dollar")
+  weekdayEnabled     Boolean  @default(true)
+  weekdayHours       String   @default("08:00 AM → 06:00 PM")
+  saturdayEnabled    Boolean  @default(true)
+  saturdayHours      String   @default("08:30 AM → 04:00 PM")
+  sundayEnabled      Boolean  @default(false)
+  sundayHours        String   @default("Closed")
+  activeBays         Int      @default(8)
+  maxIntakePerHour   Int      @default(4)
+  slotDuration       String   @default("45 Minutes")
+  advanceWindow      String   @default("30 Days in advance")
+  cancellationCutoff String   @default("24 Hours prior")
+  autoConfirm        Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+
+  @@map("workshop_settings")
+}

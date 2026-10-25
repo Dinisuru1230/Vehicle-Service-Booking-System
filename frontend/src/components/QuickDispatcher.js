@@ -20,7 +20,20 @@ const QuickDispatcher = ({ onBookClick }) => {
   const handleSearch = (e) => {
     e.preventDefault();
     if (onBookClick) {
-      onBookClick({ vehicle, service, hub });
+      const codeMap = {
+        periodic: 'SVC-101',
+        brake: 'SVC-102',
+        ecu: 'SVC-103',
+        ac: 'SVC-104',
+        alignment: 'SVC-105',
+        battery: 'SVC-106',
+      };
+      onBookClick({
+        vehicle,
+        service,
+        serviceCode: codeMap[service] || service,
+        hub,
+      });
     }
   };
 
@@ -79,12 +92,12 @@ const QuickDispatcher = ({ onBookClick }) => {
               className="dispatcher-select"
             >
               <option value="">Select Primary Service</option>
-              <option value="periodic">Periodic Maintenance Service ($89)</option>
-              <option value="brake">Brake Repair &amp; Pad Replacement ($149)</option>
-              <option value="ecu">Engine Diagnostics &amp; ECU Tuning ($79)</option>
-              <option value="ac">Climate Control &amp; AC Overhaul ($99)</option>
-              <option value="alignment">Suspension &amp; 3D Laser Alignment ($69)</option>
-              <option value="battery">Battery Health &amp; Replacement ($119)</option>
+              <option value="periodic">Periodic Maintenance Service (LKR 89)</option>
+              <option value="brake">Brake Repair &amp; Pad Replacement (LKR 149)</option>
+              <option value="ecu">Engine Diagnostics &amp; ECU Tuning (LKR 79)</option>
+              <option value="ac">Climate Control &amp; AC Overhaul (LKR 99)</option>
+              <option value="alignment">Suspension &amp; 3D Laser Alignment (LKR 69)</option>
+              <option value="battery">Battery Health &amp; Replacement (LKR 119)</option>
             </select>
             <Sliders size={16} className="select-arrow-icon" />
           </div>

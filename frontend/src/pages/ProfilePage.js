@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { userAPI, vehicleAPI } from '../api/apiClient';
+import { useAuth } from '../context/AuthContext';
 import {
   User,
   Car,
@@ -8,24 +10,25 @@ import {
   Bell,
   Mail,
   Phone,
-  Edit2,
   Plus,
   Check,
   ShieldCheck,
   X,
   CheckCircle2,
+  AlertCircle,
+  Star,
 } from 'lucide-react';
 
 const initialVehicles = [
   {
-    id: 1,
+    id: 'demo-1',
     name: '2023 BMW M3 Competition',
     isPrimary: true,
     license: 'TX-784-KPL',
     odometer: '18,450 mi',
   },
   {
-    id: 2,
+    id: 'demo-2',
     name: '2021 Porsche 911 GT3 RS',
     isPrimary: false,
     license: 'FL-992-GT',
@@ -39,22 +42,26 @@ const ProfilePage = ({
   onNavigateBookings,
   onNavigateAbout,
   onNavigateProfile,
+  onNavigateAdmin,
   onNavigateLogin,
   onNavigateRegister,
 }) => {
+  const { user: authUser, setUser: setAuthUser } = useAuth();
+
   // Navigation tab state
   const [activeTab, setActiveTab] = useState('personal'); // 'personal' | 'vehicles' | 'security' | 'notifications'
 
   // Personal details state
   const [personalInfo, setPersonalInfo] = useState({
-    firstName: 'Marcus',
-    lastName: 'Vance',
-    email: 'marcus.vance@example.com',
-    phone: '+1 (555) 019-2834',
-    address: '844 Oak Valley Dr',
-    city: 'Dallas',
-    state: 'TX',
-    zip: '75201',
+    firstName: authUser?.firstName || 'Marcus',
+    lastName: authUser?.lastName || 'Vance',
+    email: authUser?.email || 'm.vance@apexdrive.io',
+    phone: authUser?.phone || '+1 (555) 234-8901',
+    address: authUser?.address || 'Bay Area Precision Hub #742',
+    city: authUser?.city || 'San Francisco',
+    state: authUser?.state || 'CA',
+    zip: authUser?.zip || '94103',
+    tier: authUser?.tier || 'Gold Member',
   });
 
   // Saved vehicles state
@@ -68,10 +75,10 @@ const ProfilePage = ({
   });
 
   // Account & Security state
-  const [currentPassword, setCurrentPassword] = useState('••••••••••');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [is2FAEnabled, setIs2FAEnabled] = useState(true);
+  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
 
   // Notification preferences state
   const [notifications, setNotifications] = useState({
@@ -80,66 +87,270 @@ const ProfilePage = ({
     promotions: false,
   });
 
-  // Feedback banner toast state
+  // Loading & feedback banner toast state
+  const [isLoading, setIsLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [toastType, setToastType] = useState('success'); // 'success' | 'error'
 
-  const showToast = (msg) => {
+  const showToast = (msg, type = 'success') => {
+    setToastType(type);
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 3500);
+    }, 4000);
   };
 
-  const handlePersonalSubmit = (e) => {
+  // Fetch authenticated user profile and garage on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadProfileData = async () => {
+      try {
+        setIsLoading(true);
+        const res = await userAPI.getProfile();
+        if (isMounted && res.success && res.user) {
+          const u = res.user;
+          setPersonalInfo({
+            firstName: u.firstName || (u.name ? u.name.split(' ')[0] : 'Member'),
+            lastName: u.lastName || (u.name && u.name.split(' ').length > 1 ? u.name.split(' ').slice(1).join(' ') : ''),
+            email: u.email || '',
+            phone: u.phone || '',
+            address: u.address || '',
+            city: u.city || 'San Francisco',
+            state: u.state || 'CA',
+            zip: u.zip || '',
+            tier: u.tier || 'Gold Member',
+          });
+
+          if (u.vehicles && u.vehicles.length > 0) {
+            setVehicles(
+              u.vehicles.map((v) => ({
+                id: v.id,
+                name: v.name || `${v.year} ${v.make} ${v.model}`,
+                isPrimary: Boolean(v.isPrimary),
+                license: v.plate || v.license || 'N/A',
+                odometer: v.mileage || v.odometer || '0 mi',
+              }))
+            );
+          }
+
+          setIs2FAEnabled(Boolean(u.twoFactorEnabled));
+          setNotifications({
+            smsReminders: u.smsReminders !== undefined ? Boolean(u.smsReminders) : true,
+            emailStatus: u.emailStatus !== undefined ? Boolean(u.emailStatus) : true,
+            promotions: u.promotions !== undefined ? Boolean(u.promotions) : false,
+          });
+
+          if (setAuthUser) {
+            setAuthUser((prev) => ({ ...prev, ...u }));
+          }
+        }
+      } catch (err) {
+        // Fallback gracefully to default state if offline or network error
+        console.warn('[ProfilePage] Live backend sync unavailable:', err.message);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadProfileData();
+    return () => {
+      isMounted = false;
+    };
+  }, [setAuthUser]);
+
+  const handlePersonalSubmit = async (e) => {
     e.preventDefault();
-    showToast('Personal and contact details updated successfully!');
+    try {
+      setIsLoading(true);
+      const res = await userAPI.updateProfile({
+        firstName: personalInfo.firstName,
+        lastName: personalInfo.lastName,
+        name: `${personalInfo.firstName} ${personalInfo.lastName}`.trim(),
+        phone: personalInfo.phone,
+        address: personalInfo.address,
+        city: personalInfo.city,
+        state: personalInfo.state,
+        zip: personalInfo.zip,
+      });
+
+      if (res.success) {
+        showToast('Personal and contact details updated successfully!', 'success');
+        if (setAuthUser && res.user) {
+          setAuthUser((prev) => ({ ...prev, ...res.user }));
+        }
+      } else {
+        showToast(res.message || 'Failed to update personal details.', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Error updating profile details.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handlePasswordSubmit = (e) => {
+  const handlePasswordSubmit = async (e) => {
     e.preventDefault();
-    if (newPassword && newPassword !== confirmPassword) {
-      alert('New password and confirm password do not match.');
+    if (!currentPassword) {
+      showToast('Please enter your current password.', 'error');
       return;
     }
-    showToast('Password and security preferences updated successfully!');
-    setNewPassword('');
-    setConfirmPassword('');
+    if (!newPassword || newPassword.length < 6) {
+      showToast('New password must be at least 6 characters long.', 'error');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('New password and confirm password do not match.', 'error');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const res = await userAPI.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (res.success) {
+        showToast('Password updated successfully! Your account is secured.', 'success');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        showToast(res.message || 'Failed to update password.', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Incorrect current password or update failed.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleNotificationsSubmit = () => {
-    showToast('Notification preferences saved successfully!');
+  const handleNotificationsSubmit = async () => {
+    try {
+      setIsLoading(true);
+      const res = await userAPI.updatePreferences({
+        ...notifications,
+        twoFactorEnabled: is2FAEnabled,
+      });
+
+      if (res.success) {
+        showToast('Notification and security preferences saved successfully!', 'success');
+      } else {
+        showToast(res.message || 'Failed to save preferences.', 'error');
+      }
+    } catch (err) {
+      showToast(err.message || 'Error saving preferences.', 'error');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSaveVehicle = (e) => {
+  const handleSaveVehicle = async (e) => {
     e.preventDefault();
-    if (vehicleModal?.mode === 'add') {
-      const newV = {
-        id: Date.now(),
-        name: vehicleForm.name || 'New Vehicle',
-        license: vehicleForm.license || 'N/A',
-        odometer: vehicleForm.odometer || '0 mi',
-        isPrimary: vehicles.length === 0,
-      };
-      setVehicles([...vehicles, newV]);
-      showToast('New vehicle added to your garage!');
-    } else if (vehicleModal?.mode === 'edit') {
-      setVehicles(
-        vehicles.map((v) =>
-          v.id === vehicleModal.data.id ? { ...v, ...vehicleForm } : v
-        )
-      );
-      showToast('Vehicle details updated!');
+    try {
+      setIsLoading(true);
+      if (vehicleModal?.mode === 'add') {
+        const payload = {
+          name: vehicleForm.name || 'New Vehicle',
+          license: vehicleForm.license || 'N/A',
+          plate: vehicleForm.license || 'N/A',
+          odometer: vehicleForm.odometer || '0 mi',
+          mileage: vehicleForm.odometer || '0 mi',
+          isPrimary: vehicleForm.isPrimary || vehicles.length === 0,
+        };
+
+        const res = await vehicleAPI.addVehicle(payload);
+        if (res.success && res.vehicle) {
+          const newV = {
+            id: res.vehicle.id,
+            name: res.vehicle.name,
+            license: res.vehicle.license,
+            odometer: res.vehicle.odometer,
+            isPrimary: res.vehicle.isPrimary,
+          };
+          setVehicles((prev) => [
+            ...prev.map((v) => (newV.isPrimary ? { ...v, isPrimary: false } : v)),
+            newV,
+          ]);
+          showToast('New vehicle added to your garage!', 'success');
+        } else {
+          // Local fallback
+          const newV = {
+            id: String(Date.now()),
+            name: vehicleForm.name || 'New Vehicle',
+            license: vehicleForm.license || 'N/A',
+            odometer: vehicleForm.odometer || '0 mi',
+            isPrimary: vehicles.length === 0,
+          };
+          setVehicles([...vehicles, newV]);
+          showToast('Vehicle added to garage (offline mode).', 'success');
+        }
+      } else if (vehicleModal?.mode === 'edit') {
+        const id = vehicleModal.data.id;
+        const payload = {
+          name: vehicleForm.name,
+          license: vehicleForm.license,
+          plate: vehicleForm.license,
+          odometer: vehicleForm.odometer,
+          mileage: vehicleForm.odometer,
+          isPrimary: vehicleForm.isPrimary,
+        };
+
+        try {
+          await vehicleAPI.updateVehicle(id, payload);
+        } catch {
+          // Continue local update
+        }
+
+        setVehicles(
+          vehicles.map((v) =>
+            v.id === id ? { ...v, ...vehicleForm } : v
+          )
+        );
+        showToast('Vehicle details updated successfully!', 'success');
+      }
+      setVehicleModal(null);
+      setVehicleForm({ name: '', license: '', odometer: '', isPrimary: false });
+    } catch (err) {
+      showToast(err.message || 'Error saving vehicle.', 'error');
+    } finally {
+      setIsLoading(false);
     }
-    setVehicleModal(null);
-    setVehicleForm({ name: '', license: '', odometer: '', isPrimary: false });
   };
 
-  const handleRemoveVehicle = (id) => {
-    if (window.confirm('Are you sure you want to remove this vehicle?')) {
-      setVehicles(vehicles.filter((v) => v.id !== id));
-      showToast('Vehicle removed from your garage.');
+  const handleSetPrimaryVehicle = async (id) => {
+    try {
+      await vehicleAPI.setPrimary(id);
+      setVehicles((prev) =>
+        prev.map((v) => ({ ...v, isPrimary: v.id === id }))
+      );
+      showToast('Primary garage vehicle updated!', 'success');
+    } catch {
+      setVehicles((prev) =>
+        prev.map((v) => ({ ...v, isPrimary: v.id === id }))
+      );
+      showToast('Primary vehicle updated.', 'success');
     }
   };
+
+  const handleRemoveVehicle = async (id) => {
+    if (window.confirm('Are you sure you want to remove this vehicle from your garage?')) {
+      try {
+        await vehicleAPI.deleteVehicle(id);
+      } catch (err) {
+        console.warn('Vehicle delete fallback:', err.message);
+      }
+      setVehicles(vehicles.filter((v) => v.id !== id));
+      showToast('Vehicle removed from your garage.', 'success');
+    }
+  };
+
+  const fullName = `${personalInfo.firstName} ${personalInfo.lastName}`.trim() || 'Marcus Vance';
+  const userInitials = (
+    (personalInfo.firstName?.[0] || 'M') + (personalInfo.lastName?.[0] || 'V')
+  ).toUpperCase();
 
   return (
     <div className="profile-page-root">
@@ -151,6 +362,7 @@ const ProfilePage = ({
         onNavigateBookings={onNavigateBookings}
         onNavigateAbout={onNavigateAbout}
         onNavigateProfile={onNavigateProfile}
+        onNavigateAdmin={onNavigateAdmin}
         onNavigateLogin={onNavigateLogin}
         onNavigateRegister={onNavigateRegister}
       />
@@ -158,8 +370,12 @@ const ProfilePage = ({
       <main className="profile-main-container">
         {/* Toast Alert */}
         {toastMessage && (
-          <div className="profile-toast-alert">
-            <CheckCircle2 size={18} className="toast-icon" />
+          <div className={`profile-toast-alert ${toastType === 'error' ? 'toast-error' : ''}`}>
+            {toastType === 'error' ? (
+              <AlertCircle size={18} className="toast-icon text-red" />
+            ) : (
+              <CheckCircle2 size={18} className="toast-icon" />
+            )}
             <span>{toastMessage}</span>
           </div>
         )}
@@ -176,13 +392,13 @@ const ProfilePage = ({
         <div className="profile-banner-card">
           <div className="banner-left-info">
             <div className="profile-avatar-circle">
-              <span>MV</span>
+              <span>{userInitials}</span>
             </div>
 
             <div className="profile-identity-block">
               <div className="name-badge-row">
-                <h2 className="profile-user-name">Marcus Vance</h2>
-                <span className="member-tier-pill">Gold Member</span>
+                <h2 className="profile-user-name">{fullName}</h2>
+                <span className="member-tier-pill">{personalInfo.tier || 'VIP Platinum'}</span>
               </div>
 
               <div className="profile-contacts-row">
@@ -197,15 +413,6 @@ const ProfilePage = ({
               </div>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('personal')}
-            className="btn-edit-profile"
-          >
-            <Edit2 size={15} />
-            <span>Edit Profile</span>
-          </button>
         </div>
 
         {/* 4. Main Two-Column Layout (Sidebar + Panel) */}
@@ -471,6 +678,17 @@ const ProfilePage = ({
                         >
                           Book Service
                         </button>
+
+                        {!v.isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetPrimaryVehicle(v.id)}
+                            className="btn-vehicle-edit"
+                            title="Set as primary vehicle"
+                          >
+                            Set Primary
+                          </button>
+                        )}
 
                         <button
                           type="button"

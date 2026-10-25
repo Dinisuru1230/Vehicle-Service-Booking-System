@@ -25,6 +25,8 @@ const AboutUsPage = ({
   onNavigateBook,
   onNavigateBookings,
   onNavigateAbout,
+  onNavigateProfile,
+  onNavigateAdmin,
   onNavigateLogin,
   onNavigateRegister,
 }) => {
@@ -37,6 +39,8 @@ const AboutUsPage = ({
         onNavigateBook={onNavigateBook}
         onNavigateBookings={onNavigateBookings}
         onNavigateAbout={onNavigateAbout}
+        onNavigateProfile={onNavigateProfile}
+        onNavigateAdmin={onNavigateAdmin}
         onNavigateLogin={onNavigateLogin}
         onNavigateRegister={onNavigateRegister}
       />

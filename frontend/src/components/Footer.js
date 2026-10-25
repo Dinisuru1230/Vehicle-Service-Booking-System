@@ -1,5 +1,5 @@
 import React from 'react';
-import { Car, CheckCircle2, Wrench } from 'lucide-react';
+import { Car } from 'lucide-react';
 
 const Footer = () => {
   return (
@@ -18,16 +18,6 @@ const Footer = () => {
             <p className="footer-brand-desc">
               Next-generation vehicle service scheduling, precision diagnostics, and telemetry-guided maintenance. Engineered for automotive reliability and operational transparency.
             </p>
-            <div className="footer-cert-badges">
-              <div className="cert-badge cert-ase">
-                <CheckCircle2 size={14} className="cert-check-icon" />
-                <span>ASE MASTER CERTIFIED</span>
-              </div>
-              <div className="cert-badge cert-oem">
-                <Wrench size={14} className="cert-wrench-icon" />
-                <span>OEM AUTHORIZED CENTER</span>
-              </div>
-            </div>
           </div>
 
           {/* Column 2: Service Categories */}
@@ -70,13 +60,6 @@ const Footer = () => {
                 <span className="days-label">Sunday:</span>
                 <span className="time-val emergency">Emergency Roadside Only</span>
               </div>
-            </div>
-
-            <div className="footer-callout-phone">
-              <a href="tel:1-800-APEX-CAR" className="phone-bold-link">
-                1-800-APEX-CAR
-              </a>
-              <span className="dispatch-text">Dispatch lines active 24/7/365</span>
             </div>
           </div>
         </div>

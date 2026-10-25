@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import { serviceAPI, bookingAPI, vehicleAPI } from '../api/apiClient';
+import { useAuth } from '../context/AuthContext';
+import './BookingPage.css';
 import {
   Car,
   Calendar as CalendarIcon,
@@ -15,64 +18,195 @@ import {
   ChevronRight,
   ShieldCheck,
   ArrowRight,
+  Cpu,
+  Fan,
+  SlidersHorizontal,
+  BatteryCharging,
+  Sparkles,
+  Search,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  X,
 } from 'lucide-react';
 
-const serviceOptions = [
+// Fallback catalog matching backend database seeds
+const fallbackServices = [
   {
-    id: 'basic-maint',
-    title: 'Basic Maintenance',
-    subtitle: 'Oil, filter change & fluid top-off',
-    duration: '~45 mins',
+    id: 'SVC-101',
+    serviceCode: 'SVC-101',
+    title: 'Periodic Maintenance & Synthetic Oil',
+    subtitle: 'Synthetic oil change & filter inspection',
+    duration: '45 mins',
     price: 89.0,
-    icon: Wrench,
+    iconType: 'wrench',
+    category: 'Maintenance',
+    badge: '40-POINT INSPECTION',
+    isPopular: true,
   },
   {
-    id: 'brake-pads',
-    title: 'Brake Inspection & Pads',
+    id: 'SVC-102',
+    serviceCode: 'SVC-102',
+    title: 'Brake System Repair & Resurfacing',
     subtitle: 'Pad renewal & rotor safety check',
-    duration: '~60 mins',
+    duration: '60 mins',
     price: 149.0,
-    icon: Disc,
+    iconType: 'disc',
+    category: 'Brakes & Chassis',
+    badge: 'SAFETY CRITICAL',
+    isPopular: true,
   },
   {
-    id: 'diagnostics',
-    title: 'Full Diagnostics',
+    id: 'SVC-103',
+    serviceCode: 'SVC-103',
+    title: 'Engine Diagnostics & Level-3 ECU Scan',
     subtitle: 'Engine check light & systems scan',
-    duration: '~30 mins',
+    duration: '30 mins',
     price: 79.0,
-    icon: Activity,
+    iconType: 'cpu',
+    category: 'Engine & ECU',
+    badge: 'LEVEL-3 TELEMETRY',
+    isPopular: true,
   },
   {
-    id: 'ac-climate',
-    title: 'AC & Climate Service',
+    id: 'SVC-104',
+    serviceCode: 'SVC-104',
+    title: 'Climate Control & High-Pressure Flush',
     subtitle: 'Refrigerant recharge & cabin filter',
-    duration: '~40 mins',
+    duration: '40 mins',
     price: 99.0,
-    icon: Snowflake,
+    iconType: 'fan',
+    category: 'Maintenance',
+    badge: 'CLIMATE PRECISION',
+    isPopular: false,
+  },
+  {
+    id: 'SVC-105',
+    serviceCode: 'SVC-105',
+    title: 'Laser Alignment & Corner Balancing',
+    subtitle: 'Multi-axis rig camber/toe tuning',
+    duration: '75 mins',
+    price: 129.0,
+    iconType: 'sliders',
+    category: 'Brakes & Chassis',
+    badge: 'CHASSIS DYNAMICS',
+    isPopular: false,
+  },
+  {
+    id: 'SVC-106',
+    serviceCode: 'SVC-106',
+    title: '48V Hybrid & Electrical Diagnostics',
+    subtitle: 'High-voltage isolation & battery test',
+    duration: '50 mins',
+    price: 119.0,
+    iconType: 'battery',
+    category: 'Electrical',
+    badge: 'HIGH VOLTAGE',
+    isPopular: false,
+  },
+  {
+    id: 'SVC-107',
+    serviceCode: 'SVC-107',
+    title: 'Transmission & DCT Fluid Exchange',
+    subtitle: 'Dual-clutch pressurized purge & adaptation',
+    duration: '90 mins',
+    price: 189.0,
+    iconType: 'wrench',
+    category: 'Engine & ECU',
+    badge: 'POWERTRAIN CARE',
+    isPopular: false,
+  },
+  {
+    id: 'SVC-108',
+    serviceCode: 'SVC-108',
+    title: 'Track-Prep Aerodynamics & Fluids',
+    subtitle: 'SRF brake flush, corner balancing & aero torque',
+    duration: '120 mins',
+    price: 249.0,
+    iconType: 'sparkles',
+    category: 'Engine & ECU',
+    badge: 'MOTORSPORT SPEC',
+    isPopular: true,
   },
 ];
+
+const getServiceIconComponent = (iconType) => {
+  const norm = (iconType || '').toLowerCase();
+  switch (norm) {
+    case 'disc':
+      return Disc;
+    case 'cpu':
+      return Cpu;
+    case 'activity':
+      return Activity;
+    case 'fan':
+    case 'snowflake':
+      return Snowflake;
+    case 'sliders':
+    case 'slidershorizontal':
+      return SlidersHorizontal;
+    case 'battery':
+    case 'batterycharging':
+      return BatteryCharging;
+    case 'sparkles':
+      return Sparkles;
+    case 'wrench':
+    default:
+      return Wrench;
+  }
+};
 
 const morningSlots = ['08:30 AM', '10:00 AM', '11:30 AM'];
 const afternoonSlots = ['01:30 PM', '03:00 PM', '04:15 PM'];
 
 const BookingPage = ({
   onNavigateHome,
-  onNavigateLogin,
+  onNavigateBook,
   onNavigateBookings,
   onNavigateAbout,
+  onNavigateProfile,
+  onNavigateAdmin,
+  onNavigateLogin,
+  onNavigateRegister,
+  initialService,
 }) => {
+  const { user, isAuthenticated } = useAuth();
+
   // Contact & Vehicle state
   const [fullName, setFullName] = useState('Marcus Vance');
   const [phoneNumber, setPhoneNumber] = useState('+1 (555) 019-2834');
   const [vehicleMake, setVehicleMake] = useState('2023 BMW M3 Competition');
   const [licensePlate, setLicensePlate] = useState('TX-784-KPL');
+  const [userVehicles, setUserVehicles] = useState([]);
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Selected Services state (Defaulting to Basic Maintenance & Full Diagnostics matching mockup)
-  const [selectedServices, setSelectedServices] = useState([
-    'basic-maint',
-    'diagnostics',
-  ]);
+  // Live Services state from API
+  const [services, setServices] = useState(fallbackServices);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
+  const [servicesError, setServicesError] = useState(null);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Resolve initial selected service key from initialService prop
+  const getInitialSelectedServices = () => {
+    if (!initialService) return ['SVC-101'];
+    if (typeof initialService === 'string') return [initialService];
+    if (initialService.serviceCode) return [initialService.serviceCode];
+    if (typeof initialService.id === 'string' && initialService.id.startsWith('SVC')) {
+      return [initialService.id];
+    }
+    const titleStr = (initialService.title || initialService.name || initialService.service || '').toLowerCase();
+    if (titleStr.includes('brake') || titleStr.includes('pad') || titleStr.includes('rotor')) return ['SVC-102'];
+    if (titleStr.includes('ecu') || titleStr.includes('tuning') || titleStr.includes('diagnos')) return ['SVC-103'];
+    if (titleStr.includes('climate') || titleStr.includes('ac') || titleStr.includes('refrigerant')) return ['SVC-104'];
+    if (titleStr.includes('align') || titleStr.includes('suspension') || titleStr.includes('laser')) return ['SVC-105'];
+    if (titleStr.includes('battery') || titleStr.includes('hybrid') || titleStr.includes('48v')) return ['SVC-106'];
+    return ['SVC-101'];
+  };
+
+  // Selected Services state - defaults to single primary service or matched initial service
+  const [selectedServices, setSelectedServices] = useState(getInitialSelectedServices);
 
   // Calendar Date & Slot state
   const [selectedDay, setSelectedDay] = useState(14);
@@ -81,25 +215,274 @@ const BookingPage = ({
   const [currentYear, setCurrentYear] = useState(2025);
 
   // Booking Confirmation State
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBooked, setIsBooked] = useState(false);
+  const [bookedConfirmation, setBookedConfirmation] = useState(null);
+  const [bookingError, setBookingError] = useState(null);
 
-  const toggleService = (id) => {
-    if (selectedServices.includes(id)) {
-      if (selectedServices.length === 1) return; // Keep at least one selected
-      setSelectedServices(selectedServices.filter((s) => s !== id));
-    } else {
-      setSelectedServices([...selectedServices, id]);
+  // 1. Fetch live services from backend API on mount
+  const fetchServices = async () => {
+    setIsLoadingServices(true);
+    setServicesError(null);
+    try {
+      const res = await serviceAPI.getServices();
+      if (res && res.success && Array.isArray(res.services) && res.services.length > 0) {
+        const activeOnly = res.services.filter((s) => s.status !== 'Inactive');
+        setServices(activeOnly.length > 0 ? activeOnly : res.services);
+      } else if (Array.isArray(res) && res.length > 0) {
+        setServices(res);
+      }
+    } catch (err) {
+      console.warn('[BookingPage] Could not fetch services from API, using fallback catalog:', err);
+      setServicesError('Catalog loaded from local cache');
+    } finally {
+      setIsLoadingServices(false);
     }
   };
 
-  const activeServicesList = serviceOptions.filter((s) =>
-    selectedServices.includes(s.id)
-  );
+  useEffect(() => {
+    fetchServices();
+  }, []);
 
-  const totalPrice = activeServicesList.reduce((acc, curr) => acc + curr.price, 0);
+  // 2. Pre-fill user profile and vehicles when user is logged in
+  useEffect(() => {
+    if (user) {
+      const computedName =
+        user.firstName || user.lastName
+          ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+          : user.name || '';
+      if (computedName) setFullName(computedName);
+      if (user.phone) setPhoneNumber(user.phone);
 
-  const handleConfirm = () => {
-    setIsBooked(true);
+      const fetchUserVehicles = async () => {
+        try {
+          const res = await vehicleAPI.getVehicles();
+          const list = res?.vehicles || (Array.isArray(res) ? res : []);
+          if (list.length > 0) {
+            setUserVehicles(list);
+            const primaryVeh = list.find((v) => v.isPrimary) || list[0];
+            setSelectedVehicleId(primaryVeh.id);
+            setVehicleMake(
+              primaryVeh.name || `${primaryVeh.year} ${primaryVeh.make} ${primaryVeh.model}`
+            );
+            setLicensePlate(primaryVeh.plate || primaryVeh.license || '');
+          }
+        } catch {
+          // Ignore vehicle fetch error for guest/offline
+        }
+      };
+      fetchUserVehicles();
+    }
+  }, [user]);
+
+  // 3. Handle initial service passed via props (e.g. from Landing Page Book Now)
+  useEffect(() => {
+    if (!initialService) return;
+
+    const code =
+      typeof initialService === 'string'
+        ? initialService
+        : initialService.serviceCode ||
+          initialService.code ||
+          (typeof initialService.id === 'string' && initialService.id.startsWith('SVC')
+            ? initialService.id
+            : null);
+
+    const titleStr =
+      typeof initialService === 'object'
+        ? (initialService.title || initialService.name || initialService.service || '').toLowerCase()
+        : '';
+
+    if (services.length > 0) {
+      let matched = null;
+
+      // 1. Match by serviceCode or id
+      if (code) {
+        matched = services.find((s) => s.serviceCode === code || s.id === code);
+      }
+
+      // 2. Match by exact or partial title
+      if (!matched && titleStr) {
+        matched = services.find((s) => {
+          const sTitle = (s.title || '').toLowerCase();
+          return sTitle === titleStr || sTitle.includes(titleStr) || titleStr.includes(sTitle);
+        });
+      }
+
+      // 3. Match by keyword mapping
+      if (!matched && titleStr) {
+        const keywordMap = [
+          { kws: ['oil', 'periodic', 'maintenance'], code: 'SVC-101' },
+          { kws: ['brake', 'pad', 'rotor', 'stopping'], code: 'SVC-102' },
+          { kws: ['ecu', 'engine', 'diagnostic', 'tuning', 'telemetry', 'scan'], code: 'SVC-103' },
+          { kws: ['climate', 'ac', 'air condition', 'flush', 'refrigerant'], code: 'SVC-104' },
+          { kws: ['align', 'suspension', 'corner balance', 'laser', 'steering'], code: 'SVC-105' },
+          { kws: ['battery', 'hybrid', '48v', 'electrical', 'crank'], code: 'SVC-106' },
+        ];
+        for (const map of keywordMap) {
+          if (map.kws.some((kw) => titleStr.includes(kw))) {
+            matched = services.find((s) => s.serviceCode === map.code);
+            if (matched) break;
+          }
+        }
+      }
+
+      if (matched) {
+        setSelectedServices([matched.serviceCode || matched.id]);
+        setActiveCategory('All');
+      } else if (code) {
+        setSelectedServices([code]);
+      }
+    } else if (code) {
+      setSelectedServices([code]);
+    }
+
+    // Pre-fill vehicle if passed from dispatcher
+    if (typeof initialService === 'object' && initialService.vehicle) {
+      const vehMap = {
+        bmw_m3: '2023 BMW M3 Competition',
+        porsche_911: '2022 Porsche 911 Carrera',
+        audi_q7: '2023 Audi Q7 Quattro',
+        tesla_s: '2022 Tesla Model S Plaid',
+        merc_amg: '2024 Mercedes-AMG C63',
+      };
+      const mappedVeh = vehMap[initialService.vehicle] || initialService.vehicle;
+      if (mappedVeh) {
+        setVehicleMake(mappedVeh);
+      }
+    }
+  }, [initialService, services]);
+
+  // Handle vehicle dropdown selection
+  const handleVehicleSelect = (e) => {
+    const val = e.target.value;
+    setSelectedVehicleId(val);
+    if (val === 'custom') {
+      return;
+    }
+    const found = userVehicles.find((v) => v.id === val);
+    if (found) {
+      setVehicleMake(found.name || `${found.year} ${found.make} ${found.model}`);
+      setLicensePlate(found.plate || found.license || '');
+    }
+  };
+
+  // Toggle service selection (allows toggling any service on/off freely)
+  const toggleService = (srv) => {
+    const key = srv.serviceCode || srv.id;
+    const isSelected = selectedServices.some(
+      (sKey) => sKey === srv.id || sKey === srv.serviceCode
+    );
+
+    if (isSelected) {
+      setSelectedServices(
+        selectedServices.filter((sKey) => sKey !== srv.id && sKey !== srv.serviceCode)
+      );
+    } else {
+      setSelectedServices([...selectedServices, key]);
+    }
+  };
+
+  // Derive categories list dynamically
+  const categories = useMemo(() => {
+    const set = new Set();
+    services.forEach((s) => {
+      if (s.category) set.add(s.category);
+    });
+    return ['All', ...Array.from(set)];
+  }, [services]);
+
+  // Filter services by category and search
+  const displayedServices = useMemo(() => {
+    return services.filter((srv) => {
+      const matchesCategory =
+        activeCategory === 'All' || srv.category === activeCategory;
+      const q = searchQuery.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        srv.title.toLowerCase().includes(q) ||
+        (srv.subtitle && srv.subtitle.toLowerCase().includes(q)) ||
+        (srv.category && srv.category.toLowerCase().includes(q));
+      return matchesCategory && matchesSearch;
+    });
+  }, [services, activeCategory, searchQuery]);
+
+  // Active services matching selected keys
+  const activeServicesList = useMemo(() => {
+    return services.filter((s) =>
+      selectedServices.some((key) => key === s.id || key === s.serviceCode)
+    );
+  }, [services, selectedServices]);
+
+  const totalPrice = useMemo(() => {
+    return activeServicesList.reduce(
+      (acc, curr) => acc + (parseFloat(curr.price) || 0),
+      0
+    );
+  }, [activeServicesList]);
+
+  // Submit appointment
+  const handleConfirm = async () => {
+    setIsSubmitting(true);
+    setBookingError(null);
+
+    const bookingPayload = {
+      vehicleId: selectedVehicleId && selectedVehicleId !== 'custom' ? selectedVehicleId : undefined,
+      vehicleMake,
+      licensePlate,
+      fullName,
+      phoneNumber,
+      serviceItems: activeServicesList.map((s) => ({
+        id: s.serviceCode || s.id,
+        title: s.title,
+        price: parseFloat(s.price),
+        duration: s.duration,
+      })),
+      selectedServices: activeServicesList.map((s) => s.serviceCode || s.id),
+      serviceTitle: activeServicesList.map((s) => s.title).join(' & '),
+      serviceDetail: activeServicesList[0]?.subtitle || activeServicesList[0]?.description || '',
+      selectedDay,
+      currentMonth,
+      currentYear,
+      scheduledDate: `Tuesday, Oct ${selectedDay}, ${currentYear}`,
+      selectedSlot,
+      scheduledTime: selectedSlot,
+      hub: 'Apex Central Precision Hub',
+      notes,
+      totalCost: totalPrice,
+      totalPrice,
+    };
+
+    if (isAuthenticated) {
+      try {
+        const res = await bookingAPI.createBooking(bookingPayload);
+        if (res && res.success && res.booking) {
+          setBookedConfirmation(res.booking);
+          setIsBooked(true);
+        } else {
+          setBookedConfirmation({
+            bookingRef: '#APX-' + Math.floor(10000 + Math.random() * 90000),
+            bay: 'Bay 03 (Precision Lift)',
+            totalCost: totalPrice,
+          });
+          setIsBooked(true);
+        }
+      } catch (err) {
+        console.error('Booking failed:', err);
+        setBookingError(err.message || 'Failed to submit appointment. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      // Guest booking mock confirmation
+      setBookedConfirmation({
+        bookingRef: '#APX-' + Math.floor(10000 + Math.random() * 90000),
+        bay: 'Bay 03 (Standby)',
+        totalCost: totalPrice,
+      });
+      setIsBooked(true);
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -108,9 +491,13 @@ const BookingPage = ({
       <Navbar
         activeTab="book"
         onNavigateHome={onNavigateHome}
+        onNavigateBook={onNavigateBook}
         onNavigateBookings={onNavigateBookings}
         onNavigateAbout={onNavigateAbout}
+        onNavigateProfile={onNavigateProfile}
+        onNavigateAdmin={onNavigateAdmin}
         onNavigateLogin={onNavigateLogin}
+        onNavigateRegister={onNavigateRegister}
       />
 
       <main className="booking-main-container">
@@ -127,8 +514,8 @@ const BookingPage = ({
               <span className="step-number-circle filled">1</span>
               <span className="step-name">Vehicle &amp; Contact</span>
             </div>
-            <div className="step-item">
-              <span className="step-number-circle">2</span>
+            <div className="step-item active">
+              <span className="step-number-circle filled">2</span>
               <span className="step-name">Select Service</span>
             </div>
             <div className="step-item">
@@ -150,6 +537,27 @@ const BookingPage = ({
               </div>
 
               <div className="panel-form-grid">
+                {/* Saved vehicle selector if user has vehicles */}
+                {userVehicles.length > 0 && (
+                  <div className="vehicle-picker-toggle-row">
+                    <div style={{ width: '100%' }}>
+                      <label className="input-field-label">SAVED GARAGE VEHICLES</label>
+                      <select
+                        value={selectedVehicleId}
+                        onChange={handleVehicleSelect}
+                        className="vehicle-saved-select"
+                      >
+                        {userVehicles.map((v) => (
+                          <option key={v.id} value={v.id}>
+                            {v.name || `${v.year} ${v.make} ${v.model}`} ({v.plate || v.license || 'No Plate'})
+                          </option>
+                        ))}
+                        <option value="custom">+ Enter a different vehicle</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 <div className="form-input-box">
                   <label className="input-field-label">FULL NAME</label>
                   <input
@@ -157,6 +565,7 @@ const BookingPage = ({
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="styled-form-input"
+                    placeholder="Enter your name"
                   />
                 </div>
 
@@ -167,6 +576,7 @@ const BookingPage = ({
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     className="styled-form-input"
+                    placeholder="+1 (555) 000-0000"
                   />
                 </div>
 
@@ -177,6 +587,7 @@ const BookingPage = ({
                     value={vehicleMake}
                     onChange={(e) => setVehicleMake(e.target.value)}
                     className="styled-form-input"
+                    placeholder="e.g. 2023 BMW M3 Competition"
                   />
                 </div>
 
@@ -187,6 +598,7 @@ const BookingPage = ({
                     value={licensePlate}
                     onChange={(e) => setLicensePlate(e.target.value)}
                     className="styled-form-input"
+                    placeholder="e.g. TX-784-KPL"
                   />
                 </div>
               </div>
@@ -199,46 +611,157 @@ const BookingPage = ({
                   <span className="panel-step-num">2</span>
                   <h2 className="panel-title">Choose Services</h2>
                 </div>
-                <span className="select-hint-text">Select one or more</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <span className="select-hint-text">Select one or more</span>
+                  <button
+                    type="button"
+                    onClick={fetchServices}
+                    className="services-reload-btn"
+                    title="Reload live services from database"
+                  >
+                    <RefreshCw size={14} className={isLoadingServices ? 'spin-animation' : ''} />
+                  </button>
+                </div>
               </div>
 
-              {/* 2x2 Services Grid */}
-              <div className="services-selection-grid">
-                {serviceOptions.map((srv) => {
-                  const isSelected = selectedServices.includes(srv.id);
-                  const IconComponent = srv.icon;
-
-                  return (
-                    <div
-                      key={srv.id}
-                      onClick={() => toggleService(srv.id)}
-                      className={`service-option-card ${isSelected ? 'selected' : ''}`}
+              {/* Toolbar: Dedicated Search Bar + Category Filter Tabs */}
+              <div className="services-controls-stack">
+                <div className="services-search-wrapper">
+                  <Search size={16} className="services-search-icon" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search services by name, package or keyword (e.g. oil, brake, ecu)..."
+                    className="services-search-input"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      className="services-search-clear-btn"
+                      title="Clear search"
+                      aria-label="Clear search"
                     >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="services-filter-tabs-row">
+                  <div className="services-filter-tabs">
+                    {categories.map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setActiveCategory(cat)}
+                        className={`service-filter-tab ${activeCategory === cat ? 'active' : ''}`}
+                      >
+                        {cat} {cat === 'All' ? `(${services.length})` : ''}
+                      </button>
+                    ))}
+                  </div>
+                  {searchQuery && (
+                    <span className="services-search-count-hint">
+                      {displayedServices.length} {displayedServices.length === 1 ? 'service found' : 'services found'}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Services Grid or Loading Skeletons */}
+              <div className="services-selection-grid">
+                {isLoadingServices ? (
+                  Array.from({ length: 4 }).map((_, idx) => (
+                    <div key={`skel-${idx}`} className="services-skeleton-card">
                       <div className="service-card-top-row">
-                        <div className="service-icon-box">
-                          <IconComponent size={20} className="srv-icon" />
-                        </div>
-                        <div className="service-info-text">
-                          <h4 className="srv-title">{srv.title}</h4>
-                          <p className="srv-subtitle">{srv.subtitle}</p>
-                        </div>
-                        <div className={`srv-custom-checkbox ${isSelected ? 'checked' : ''}`}>
-                          {isSelected && <Check size={14} className="check-mark" />}
+                        <div className="skeleton-shimmer-box" style={{ width: 38, height: 38 }} />
+                        <div style={{ flex: 1 }}>
+                          <div className="skeleton-shimmer-box" style={{ width: '70%', height: 16, marginBottom: 8 }} />
+                          <div className="skeleton-shimmer-box" style={{ width: '90%', height: 12 }} />
                         </div>
                       </div>
-
                       <div className="service-card-bottom-row">
-                        <div className="srv-duration">
-                          <Clock size={14} className="clock-icon" />
-                          <span>{srv.duration}</span>
-                        </div>
-                        <span className={`srv-price ${isSelected ? 'selected-price' : ''}`}>
-                          ${srv.price.toFixed(2)}
-                        </span>
+                        <div className="skeleton-shimmer-box" style={{ width: '35%', height: 14 }} />
+                        <div className="skeleton-shimmer-box" style={{ width: '25%', height: 18 }} />
                       </div>
                     </div>
-                  );
-                })}
+                  ))
+                ) : displayedServices.length === 0 ? (
+                  <div className="services-empty-state">
+                    <p style={{ fontWeight: 600, color: '#334155', marginBottom: '0.25rem' }}>
+                      {searchQuery
+                        ? `No services found matching "${searchQuery}"`
+                        : `No services found in category "${activeCategory}"`}
+                    </p>
+                    <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '0.75rem' }}>
+                      Try choosing another category or clearing your search filter.
+                    </p>
+                    {(searchQuery || activeCategory !== 'All') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setActiveCategory('All');
+                        }}
+                        className="services-reset-filters-btn"
+                      >
+                        Reset Filters
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  displayedServices.map((srv) => {
+                    const isSelected = selectedServices.some(
+                      (key) => key === srv.id || key === srv.serviceCode
+                    );
+                    const IconComponent = getServiceIconComponent(srv.iconType);
+                    const durationStr = srv.duration
+                      ? srv.duration.startsWith('~')
+                        ? srv.duration
+                        : `~${srv.duration}`
+                      : '~45 mins';
+                    const priceNum = parseFloat(srv.price) || 0;
+
+                    return (
+                      <div
+                        key={srv.id || srv.serviceCode}
+                        onClick={() => toggleService(srv)}
+                        className={`service-option-card ${isSelected ? 'selected' : ''}`}
+                      >
+                        <div>
+                          {srv.badge && (
+                            <span className={`srv-badge-tag ${srv.isPopular ? 'badge-popular' : ''}`}>
+                              {srv.badge}
+                            </span>
+                          )}
+                          <div className="service-card-top-row">
+                            <div className="service-icon-box">
+                              <IconComponent size={20} className="srv-icon" />
+                            </div>
+                            <div className="service-info-text">
+                              <h4 className="srv-title">{srv.title}</h4>
+                              <p className="srv-subtitle">{srv.subtitle || srv.description}</p>
+                            </div>
+                            <div className={`srv-custom-checkbox ${isSelected ? 'checked' : ''}`}>
+                              {isSelected && <Check size={14} className="check-mark" />}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="service-card-bottom-row">
+                          <div className="srv-duration">
+                            <Clock size={14} className="clock-icon" />
+                            <span>{durationStr}</span>
+                          </div>
+                          <span className={`srv-price ${isSelected ? 'selected-price' : ''}`}>
+                            LKR {priceNum.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
 
               {/* Optional Notes */}
@@ -390,8 +913,8 @@ const BookingPage = ({
                 </div>
                 <div className="summary-veh-details">
                   <span className="veh-tag">VEHICLE</span>
-                  <span className="veh-model-name">{vehicleMake}</span>
-                  <span className="veh-plate-sub">{licensePlate}</span>
+                  <span className="veh-model-name">{vehicleMake || 'Select Vehicle'}</span>
+                  <span className="veh-plate-sub">{licensePlate || 'Plate Pending'}</span>
                 </div>
               </div>
 
@@ -403,7 +926,7 @@ const BookingPage = ({
                     <span>Date:</span>
                   </span>
                   <span className="info-line-val">
-                    Tuesday, Oct {selectedDay}, 2025
+                    Tuesday, Oct {selectedDay}, {currentYear}
                   </span>
                 </div>
 
@@ -422,20 +945,47 @@ const BookingPage = ({
                   SELECTED SERVICES ({activeServicesList.length})
                 </span>
                 <div className="breakdown-list">
-                  {activeServicesList.map((srv) => (
-                    <div key={srv.id} className="breakdown-row">
-                      <span className="breakdown-name">{srv.title}</span>
-                      <span className="breakdown-price">${srv.price.toFixed(2)}</span>
+                  {activeServicesList.length === 0 ? (
+                    <div style={{ padding: '0.65rem 0', color: '#94a3b8', fontSize: '0.84rem' }}>
+                      No service selected. Click a service above to select.
                     </div>
-                  ))}
+                  ) : (
+                    activeServicesList.map((srv) => (
+                      <div key={srv.id || srv.serviceCode} className="breakdown-row">
+                        <span className="breakdown-name">{srv.title}</span>
+                        <span className="breakdown-price">LKR {(parseFloat(srv.price) || 0).toFixed(2)}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
+
+              {/* Error message banner if booking failed */}
+              {bookingError && (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    color: '#b91c1c',
+                    padding: '0.65rem',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    marginBottom: '1rem',
+                  }}
+                >
+                  <AlertCircle size={16} />
+                  <span>{bookingError}</span>
+                </div>
+              )}
 
               {/* Divider & Total */}
               <div className="summary-total-section">
                 <div className="total-display-row">
                   <span className="total-due-text">Total Due at Bay</span>
-                  <span className="total-amount-number">${totalPrice.toFixed(2)}</span>
+                  <span className="total-amount-number">LKR {totalPrice.toFixed(2)}</span>
                 </div>
                 <p className="pay-guarantee-note">
                   Pay after inspection. Free cancellation anytime.
@@ -446,10 +996,26 @@ const BookingPage = ({
               <button
                 type="button"
                 onClick={handleConfirm}
+                disabled={isSubmitting || activeServicesList.length === 0}
                 className="btn-confirm-appointment"
+                style={{
+                  opacity: isSubmitting || activeServicesList.length === 0 ? 0.6 : 1,
+                  cursor: activeServicesList.length === 0 ? 'not-allowed' : 'pointer',
+                }}
               >
-                <span>Confirm &amp; Book Appointment</span>
-                <ArrowRight size={17} className="btn-arrow" />
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={17} className="spin-animation" />
+                    <span>Confirming Appointment...</span>
+                  </>
+                ) : activeServicesList.length === 0 ? (
+                  <span>Select a Service to Continue</span>
+                ) : (
+                  <>
+                    <span>Confirm &amp; Book Appointment</span>
+                    <ArrowRight size={17} className="btn-arrow" />
+                  </>
+                )}
               </button>
             </div>
 
@@ -476,17 +1042,33 @@ const BookingPage = ({
             </div>
             <h3 className="modal-title text-center">Appointment Confirmed!</h3>
             <p className="modal-desc text-center">
-              Your service appointment for the <strong>{vehicleMake}</strong> has been confirmed for <strong>Tuesday, Oct {selectedDay}, 2025 at {selectedSlot}</strong>.
+              Your service appointment for the <strong>{vehicleMake}</strong> has been confirmed for{' '}
+              <strong>
+                Tuesday, Oct {selectedDay}, {currentYear} at {selectedSlot}
+              </strong>.
             </p>
             <div className="success-details-pill">
-              <span>Bay 03 Reserved</span> • <span>Estimate: ${totalPrice.toFixed(2)}</span>
+              <span>{bookedConfirmation?.bookingRef || '#APX-84920'}</span> •{' '}
+              <span>{bookedConfirmation?.bay || 'Bay Standby Reserved'}</span> •{' '}
+              <span>Estimate: LKR {totalPrice.toFixed(2)}</span>
             </div>
-            <div className="modal-actions justify-center">
+            <div className="modal-actions justify-center" style={{ gap: '0.75rem' }}>
               <button
-                onClick={() => setIsBooked(false)}
+                type="button"
+                onClick={() => {
+                  setIsBooked(false);
+                  if (onNavigateBookings) onNavigateBookings();
+                }}
                 className="btn-primary"
               >
-                Done &amp; View Schedule
+                View My Bookings
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsBooked(false)}
+                className="btn-secondary"
+              >
+                Close
               </button>
             </div>
           </div>

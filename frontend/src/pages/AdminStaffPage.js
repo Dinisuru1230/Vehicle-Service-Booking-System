@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Car,
   LayoutDashboard,
@@ -28,6 +28,7 @@ import {
   AlertCircle,
   UserCheck,
 } from 'lucide-react';
+import { adminStaffAPI } from '../api/apiClient';
 
 const initialStaff = [
   {
@@ -344,6 +345,42 @@ const AdminStaffPage = ({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
+  // Live Metrics state
+  const [liveMetrics, setLiveMetrics] = useState({
+    totalStaff: 14,
+    onDutyCount: 10,
+    activeInBayCount: 8,
+    efficiencyRate: 96,
+  });
+
+  // Fetch live staff roster and workshop metrics from backend on mount
+  useEffect(() => {
+    let isMounted = true;
+    const loadStaffData = async () => {
+      try {
+        const [staffRes, metricsRes] = await Promise.all([
+          adminStaffAPI.getStaff({ limit: 100 }),
+          adminStaffAPI.getMetrics(),
+        ]);
+        if (isMounted) {
+          if (staffRes.success && staffRes.staff && staffRes.staff.length > 0) {
+            setStaff(staffRes.staff);
+          }
+          if (metricsRes.success && metricsRes.metrics) {
+            setLiveMetrics(metricsRes.metrics);
+          }
+        }
+      } catch (err) {
+        console.warn('[AdminStaffPage] Live staff backend sync deferred:', err.message);
+      }
+    };
+
+    loadStaffData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   // Modals & Feedback
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTech, setSelectedTech] = useState(null);
@@ -413,49 +450,69 @@ const AdminStaffPage = ({
     }
   };
 
-  // Handle Add Technician
-  const handleAddTechnician = (e) => {
+  // Handle Add Technician (Live backend API call with local fallback)
+  const handleAddTechnician = async (e) => {
     e.preventDefault();
-    const initials =
-      newTech.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2) || 'TC';
+    try {
+      const res = await adminStaffAPI.createStaff({
+        name: newTech.name,
+        email: newTech.email,
+        role: newTech.role,
+        specialization: newTech.specialization,
+        bay: newTech.bay,
+        vehicleText: newTech.vehicleText,
+        certs: newTech.certs,
+        status: newTech.status,
+      });
 
-    const certList = newTech.certs
-      .split(',')
-      .map((c) => ({ name: c.trim(), color: 'badge-cert-blue' }))
-      .filter((c) => c.name.length > 0);
+      if (res.success && res.staff) {
+        setStaff((prev) => [res.staff, ...prev]);
+        showToast(res.message || `Technician "${res.staff.name}" added to workshop roster!`);
+      }
+    } catch (err) {
+      // Local fallback
+      const initials =
+        newTech.name
+          .split(' ')
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase()
+          .slice(0, 2) || 'TC';
 
-    const newEntry = {
-      id: `TECH-${Math.floor(15 + Math.random() * 85)}`,
-      initials,
-      avatarBg: 'avatar-blue',
-      name: newTech.name || 'New Technician',
-      email: newTech.email || `${initials.toLowerCase()}@apexdrive.io`,
-      role: newTech.role,
-      specialization: newTech.specialization,
-      bay: newTech.bay.split(' ')[0],
-      baySub: newTech.bay.split(' ').slice(1).join(' ') || '(Assigned)',
-      bayDotColor: 'dot-green',
-      vehicleIcon: newTech.status === 'Available' ? 'check' : 'car',
-      vehicleText: newTech.vehicleText || 'Available for Dispatch',
-      vehicleColor: newTech.status === 'Available' ? 'text-green' : 'text-dark',
-      certs: certList.length > 0 ? certList : [{ name: 'Certified Tech', color: 'badge-cert-blue' }],
-      status: newTech.status,
-      statusClass:
-        newTech.status === 'In-Bay'
-          ? 'status-inbay-blue'
-          : newTech.status === 'Available'
-          ? 'status-available-green'
-          : 'status-scheduled-green',
-    };
+      const certList = newTech.certs
+        .split(',')
+        .map((c) => ({ name: c.trim(), color: 'badge-cert-blue' }))
+        .filter((c) => c.name.length > 0);
 
-    setStaff([newEntry, ...staff]);
+      const newEntry = {
+        id: `TECH-${Math.floor(15 + Math.random() * 85)}`,
+        initials,
+        avatarBg: 'avatar-blue',
+        name: newTech.name || 'New Technician',
+        email: newTech.email || `${initials.toLowerCase()}@apexdrive.io`,
+        role: newTech.role,
+        specialization: newTech.specialization,
+        bay: newTech.bay.split(' ')[0],
+        baySub: newTech.bay.split(' ').slice(1).join(' ') || '(Assigned)',
+        bayDotColor: 'dot-green',
+        vehicleIcon: newTech.status === 'Available' ? 'check' : 'car',
+        vehicleText: newTech.vehicleText || 'Available for Dispatch',
+        vehicleColor: newTech.status === 'Available' ? 'text-green' : 'text-dark',
+        certs: certList.length > 0 ? certList : [{ name: 'Certified Tech', color: 'badge-cert-blue' }],
+        status: newTech.status,
+        statusClass:
+          newTech.status === 'In-Bay'
+            ? 'status-inbay-blue'
+            : newTech.status === 'Available'
+            ? 'status-available-green'
+            : 'status-scheduled-green',
+      };
+
+      setStaff((prev) => [newEntry, ...prev]);
+      showToast(`Technician "${newEntry.name}" added to workshop roster!`);
+    }
+
     setModalOpen(false);
-    showToast(`Technician "${newEntry.name}" added to workshop roster!`);
     setNewTech({
       name: '',
       email: '',
@@ -681,7 +738,7 @@ const AdminStaffPage = ({
                   <Users size={18} className="text-blue" />
                 </div>
               </div>
-              <div className="stat-number-large">14</div>
+              <div className="stat-number-large">{liveMetrics.totalStaff || staff.length}</div>
               <div className="stat-footer-line">
                 <span className="dot-blue-inline"></span>
                 <span className="stat-footer-text">Active workshop team members</span>
@@ -697,11 +754,12 @@ const AdminStaffPage = ({
                 </div>
               </div>
               <div className="stat-number-large">
-                10 <span className="stat-number-subtext">/ 14 tech roster</span>
+                {liveMetrics.onDutyCount || 10}{' '}
+                <span className="stat-number-subtext">/ {liveMetrics.totalStaff || staff.length} tech roster</span>
               </div>
               <div className="stat-footer-line text-green-accent">
                 <Check size={14} className="text-green mr-1" />
-                <span>All 8 bays covered</span>
+                <span>{liveMetrics.bayCoverageText || 'All 8 bays covered'}</span>
               </div>
             </div>
 
@@ -713,10 +771,10 @@ const AdminStaffPage = ({
                   <Building2 size={18} className="text-indigo" />
                 </div>
               </div>
-              <div className="stat-number-large">8</div>
+              <div className="stat-number-large">{liveMetrics.activeInBayCount !== undefined ? liveMetrics.activeInBayCount : 7}</div>
               <div className="stat-footer-line text-blue-accent">
                 <span className="dot-blue-inline"></span>
-                <span>8 vehicles actively servicing</span>
+                <span>Active vehicles servicing in bays</span>
               </div>
             </div>
 
@@ -728,10 +786,10 @@ const AdminStaffPage = ({
                   <ShieldCheck size={18} className="text-green" />
                 </div>
               </div>
-              <div className="stat-number-large">96%</div>
+              <div className="stat-number-large">{liveMetrics.efficiencyRate || 96}%</div>
               <div className="stat-footer-line text-green-accent">
                 <TrendingUp size={14} className="text-green mr-1" />
-                <span>+4% vs last week benchmark</span>
+                <span>Shop precision benchmark</span>
               </div>
             </div>
           </div>

@@ -16,6 +16,7 @@ import {
 const serviceCatalog = [
   {
     id: 1,
+    serviceCode: 'SVC-101',
     title: 'Periodic Maintenance Service',
     category: 'Maintenance',
     badge: '40-POINT INSPECTION',
@@ -29,6 +30,7 @@ const serviceCatalog = [
   },
   {
     id: 2,
+    serviceCode: 'SVC-102',
     title: 'Brake System Repair & Pad Replacement',
     category: 'Brakes & Chassis',
     badge: 'SAFETY CRITICAL',
@@ -42,6 +44,7 @@ const serviceCatalog = [
   },
   {
     id: 3,
+    serviceCode: 'SVC-103',
     title: 'Engine Diagnostics & ECU Tuning',
     category: 'Engine & ECU',
     badge: 'LEVEL-3 TELEMETRY',
@@ -55,6 +58,7 @@ const serviceCatalog = [
   },
   {
     id: 4,
+    serviceCode: 'SVC-104',
     title: 'Climate Control & AC Overhaul',
     category: 'Maintenance',
     badge: 'CLIMATE PRECISION',
@@ -68,6 +72,7 @@ const serviceCatalog = [
   },
   {
     id: 5,
+    serviceCode: 'SVC-105',
     title: 'Suspension, Steering & Alignment',
     category: 'Brakes & Chassis',
     badge: '3D LASER ALIGNMENT',
@@ -81,6 +86,7 @@ const serviceCatalog = [
   },
   {
     id: 6,
+    serviceCode: 'SVC-106',
     title: 'Battery Health Test & Replacement',
     category: 'Electrical',
     badge: 'COLD CRANK TEST',
@@ -129,6 +135,8 @@ const LandingPage = ({
   onNavigateBook,
   onNavigateBookings,
   onNavigateAbout,
+  onNavigateProfile,
+  onNavigateAdmin,
   onNavigateLogin,
   onNavigateRegister,
 }) => {
@@ -163,6 +171,8 @@ const LandingPage = ({
         onNavigateBook={onNavigateBook}
         onNavigateBookings={onNavigateBookings}
         onNavigateAbout={onNavigateAbout}
+        onNavigateProfile={onNavigateProfile}
+        onNavigateAdmin={onNavigateAdmin}
         onNavigateLogin={onNavigateLogin}
         onNavigateRegister={onNavigateRegister}
       />
@@ -278,7 +288,7 @@ const LandingPage = ({
                       <h3 className="card-service-title">{item.title}</h3>
                       <div className="card-price-block">
                         <span className="price-prefix">STARTING AT</span>
-                        <span className="price-amount">${item.price}</span>
+                        <span className="price-amount">LKR {item.price}</span>
                       </div>
                     </div>
 
@@ -389,7 +399,7 @@ const LandingPage = ({
               <button
                 type="button"
                 className="btn-cta-primary"
-                onClick={() => alert('Opening slot reservation drawer.')}
+                onClick={() => handleBookService()}
               >
                 <Calendar size={17} className="btn-cal-icon" />
                 <span>Reserve Slot Now</span>
@@ -414,7 +424,7 @@ const LandingPage = ({
             <div className="modal-body-content">
               <div className="modal-top-row">
                 <span className="modal-category-badge">{modalService.category}</span>
-                <span className="modal-price">${modalService.price}</span>
+                <span className="modal-price">LKR {modalService.price}</span>
               </div>
               <h3 className="modal-title">{modalService.title}</h3>
               <p className="modal-desc">{modalService.description}</p>

@@ -3,6 +3,7 @@ import {
   Gauge,
   Radio,
   CheckCircle2,
+  AlertCircle,
   Car,
   Lock,
   Eye,
@@ -10,26 +11,71 @@ import {
   ArrowRight,
   ShieldCheck,
   Headphones,
+  Key,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const LoginPage = ({ onNavigateToRegister }) => {
+const LoginPage = ({
+  onNavigateToRegister,
+  onNavigateRegister,
+  onNavigateHome,
+  onNavigateDashboard,
+  onNavigateProfile,
+}) => {
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [authStatus, setAuthStatus] = useState(null); // 'success' | 'error' | null
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleQuickFill = (type) => {
+    if (type === 'admin') {
+      setEmail('m.vance@apexdrive.io');
+      setPassword('ApexAdmin2026!');
+    } else {
+      setEmail('alexander@example.com');
+      setPassword('Customer2026!');
+    }
+    setAuthStatus(null);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setAuthStatus(null);
+    setErrorMessage('');
 
-    // Simulate login verification
-    setTimeout(() => {
+    try {
+      const result = await login(email, password);
       setIsLoading(false);
       setAuthStatus('success');
-    }, 1000);
+
+      const loggedUser = result.user;
+      setTimeout(() => {
+        if (loggedUser && loggedUser.role === 'admin') {
+          if (onNavigateDashboard) {
+            onNavigateDashboard();
+          } else if (onNavigateHome) {
+            onNavigateHome();
+          }
+        } else {
+          if (onNavigateProfile) {
+            onNavigateProfile();
+          } else if (onNavigateHome) {
+            onNavigateHome();
+          }
+        }
+      }, 500);
+    } catch (err) {
+      setIsLoading(false);
+      setAuthStatus('error');
+      setErrorMessage(
+        err.message || 'Authentication failed. Please verify your email and password.'
+      );
+    }
   };
 
   return (
@@ -118,9 +164,84 @@ const LoginPage = ({ onNavigateToRegister }) => {
           {authStatus === 'success' && (
             <div className="login-alert-success">
               <CheckCircle2 size={16} />
-              <span>Authorization successful. Redirecting to garage terminal...</span>
+              <span>Authorization successful. Redirecting to terminal...</span>
             </div>
           )}
+
+          {authStatus === 'error' && (
+            <div
+              className="login-alert-error"
+              style={{
+                background: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca',
+                borderRadius: '8px',
+                padding: '0.75rem 1rem',
+                marginBottom: '1rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem',
+                fontSize: '0.86rem',
+              }}
+            >
+              <AlertCircle size={16} className="flex-shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          {/* Quick Demo Login Credentials Bar */}
+          <div
+            style={{
+              background: '#f8fafc',
+              border: '1px dashed #cbd5e1',
+              borderRadius: '8px',
+              padding: '0.65rem 0.85rem',
+              marginBottom: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>
+              Quick Fill Demo:
+            </span>
+            <div style={{ display: 'flex', gap: '0.4rem' }}>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('admin')}
+                style={{
+                  background: '#eff6ff',
+                  color: '#0066f5',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '5px',
+                  padding: '0.25rem 0.55rem',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Admin (Marcus Vance)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickFill('customer')}
+                style={{
+                  background: '#f0fdf4',
+                  color: '#15803d',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '5px',
+                  padding: '0.25rem 0.55rem',
+                  fontSize: '0.74rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Customer (Alexander W.)
+              </button>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="auth-form-fields">
             {/* Email Field */}

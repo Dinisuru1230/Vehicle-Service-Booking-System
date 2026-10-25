@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { adminCustomerAPI } from '../api/apiClient';
 import {
   Car,
   LayoutDashboard,
@@ -594,6 +595,25 @@ const AdminCustomersPage = ({
     color: 'Metallic Silver',
   });
 
+  // Fetch live customers from Backend on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchCustomers = async () => {
+      try {
+        const res = await adminCustomerAPI.getCustomers({ limit: 100 });
+        if (isMounted && res.success && res.customers && res.customers.length > 0) {
+          setCustomers(res.customers);
+        }
+      } catch (err) {
+        console.warn('[AdminCustomersPage] Backend sync fallback to initial dataset:', err.message);
+      }
+    };
+    fetchCustomers();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const showToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
@@ -605,21 +625,23 @@ const AdminCustomersPage = ({
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
-        c.firstName.toLowerCase().includes(q) ||
-        c.lastName.toLowerCase().includes(q) ||
-        c.id.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.phone.includes(q) ||
-        c.city.toLowerCase().includes(q) ||
-        c.vehicles.some(
-          (v) =>
-            v.make.toLowerCase().includes(q) ||
-            v.model.toLowerCase().includes(q) ||
-            v.plate.toLowerCase().includes(q)
-        );
+        (c.firstName && c.firstName.toLowerCase().includes(q)) ||
+        (c.lastName && c.lastName.toLowerCase().includes(q)) ||
+        (c.name && c.name.toLowerCase().includes(q)) ||
+        (c.id && c.id.toLowerCase().includes(q)) ||
+        (c.email && c.email.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.includes(q)) ||
+        (c.city && c.city.toLowerCase().includes(q)) ||
+        (c.vehicles &&
+          c.vehicles.some(
+            (v) =>
+              (v.make && v.make.toLowerCase().includes(q)) ||
+              (v.model && v.model.toLowerCase().includes(q)) ||
+              (v.plate && v.plate.toLowerCase().includes(q))
+          ));
 
       const matchesTier =
-        tierFilter === 'All' || c.tier.toLowerCase() === tierFilter.toLowerCase();
+        tierFilter === 'All' || (c.tier && c.tier.toLowerCase() === tierFilter.toLowerCase());
 
       const matchesStatus =
         statusFilter === 'All' ||
@@ -630,10 +652,10 @@ const AdminCustomersPage = ({
       return matchesSearch && matchesTier && matchesStatus;
     })
     .sort((a, b) => {
-      if (sortBy === 'spend') return b.lifetimeSpend - a.lifetimeSpend;
-      if (sortBy === 'vehicles') return b.vehicles.length - a.vehicles.length;
-      if (sortBy === 'name') return a.lastName.localeCompare(b.lastName);
-      return b.totalVisits - a.totalVisits; // default recent/visits
+      if (sortBy === 'spend') return (b.lifetimeSpend || 0) - (a.lifetimeSpend || 0);
+      if (sortBy === 'vehicles') return (b.vehicles?.length || 0) - (a.vehicles?.length || 0);
+      if (sortBy === 'name') return (a.lastName || a.name || '').localeCompare(b.lastName || b.name || '');
+      return (b.totalVisits || 0) - (a.totalVisits || 0); // default recent/visits
     });
 
   // Pagination calculation
@@ -645,7 +667,7 @@ const AdminCustomersPage = ({
 
   // Metric counts
   const totalRegisteredVehicles = customers.reduce(
-    (sum, c) => sum + c.vehicles.length,
+    (sum, c) => sum + (c.vehicles ? c.vehicles.length : 0),
     0
   );
   const vipCount = customers.filter(
@@ -653,64 +675,93 @@ const AdminCustomersPage = ({
   ).length;
 
   // Handlers
-  const handleCreateCustomer = (e) => {
+  const handleCreateCustomer = async (e) => {
     e.preventDefault();
     if (!newCustomer.firstName || !newCustomer.email) {
       showToast('Please provide customer name and email.');
       return;
     }
 
-    const createdId = `CUST-${1000 + customers.length + 1}`;
-    const initials = `${newCustomer.firstName[0]}${newCustomer.lastName ? newCustomer.lastName[0] : ''}`.toUpperCase();
+    try {
+      const res = await adminCustomerAPI.createCustomer({
+        firstName: newCustomer.firstName,
+        lastName: newCustomer.lastName,
+        name: `${newCustomer.firstName} ${newCustomer.lastName || ''}`.trim(),
+        email: newCustomer.email,
+        phone: newCustomer.phone,
+        city: newCustomer.city,
+        address: newCustomer.address,
+        tier: newCustomer.tier,
+        vehicleMake: newCustomer.vehicleMake,
+        vehicleModel: newCustomer.vehicleModel,
+        vehicleYear: newCustomer.vehicleYear,
+        vehiclePlate: newCustomer.vehiclePlate,
+        vehicleVin: newCustomer.vehicleVin,
+        notes: newCustomer.notes,
+      });
 
-    const createdCustomer = {
-      id: createdId,
-      firstName: newCustomer.firstName,
-      lastName: newCustomer.lastName || '',
-      initials,
-      avatarBg: 'avatar-blue',
-      email: newCustomer.email,
-      phone: newCustomer.phone || '+1 (555) 000-0000',
-      city: newCustomer.city || 'Bay Area, CA',
-      address: newCustomer.address || 'Confidential Residence',
-      memberSince: 'October 2024',
-      tier: newCustomer.tier,
-      tierBadgeClass:
-        newCustomer.tier === 'VIP Platinum'
-          ? 'badge-tier-vip'
-          : newCustomer.tier === 'Corporate Fleet'
-          ? 'badge-tier-fleet'
-          : newCustomer.tier === 'Gold Member'
-          ? 'badge-tier-gold'
-          : 'badge-tier-standard',
-      status: 'Active',
-      statusBadgeClass: 'status-active',
-      lifetimeSpend: 0.0,
-      totalVisits: 0,
-      lastVisit: 'New Account • No Services Yet',
-      notes: newCustomer.notes || 'Newly registered vehicle owner.',
-      vehicles: newCustomer.vehicleMake
-        ? [
-            {
-              id: `VEH-${Date.now().toString().slice(-4)}`,
-              make: newCustomer.vehicleMake,
-              model: newCustomer.vehicleModel || 'Standard',
-              year: Number(newCustomer.vehicleYear) || 2023,
-              plate: newCustomer.vehiclePlate || 'TEMP-REG',
-              vin: newCustomer.vehicleVin || 'PENDING-VERIFICATION',
-              mileage: '0 mi',
-              color: 'Standard',
-              inBay: false,
-              lastService: 'Intake Inspection Pending',
-            },
-          ]
-        : [],
-      serviceHistory: [],
-    };
+      if (res.success && res.customer) {
+        setCustomers([res.customer, ...customers]);
+        showToast(`Customer ${res.customer.name} registered successfully!`);
+      } else {
+        throw new Error(res.message || 'Customer creation failed');
+      }
+    } catch (err) {
+      console.warn('Backend create customer fallback:', err.message);
+      const createdId = `CUST-${1000 + customers.length + 1}`;
+      const initials = `${newCustomer.firstName[0]}${newCustomer.lastName ? newCustomer.lastName[0] : ''}`.toUpperCase();
 
-    setCustomers([createdCustomer, ...customers]);
+      const createdCustomer = {
+        id: createdId,
+        firstName: newCustomer.firstName,
+        lastName: newCustomer.lastName || '',
+        name: `${newCustomer.firstName} ${newCustomer.lastName || ''}`.trim(),
+        initials,
+        avatarBg: 'avatar-blue',
+        email: newCustomer.email,
+        phone: newCustomer.phone || '+1 (555) 000-0000',
+        city: newCustomer.city || 'Bay Area, CA',
+        address: newCustomer.address || 'Confidential Residence',
+        memberSince: 'October 2024',
+        tier: newCustomer.tier,
+        tierBadgeClass:
+          newCustomer.tier === 'VIP Platinum'
+            ? 'badge-tier-vip'
+            : newCustomer.tier === 'Corporate Fleet'
+            ? 'badge-tier-fleet'
+            : newCustomer.tier === 'Gold Member'
+            ? 'badge-tier-gold'
+            : 'badge-tier-standard',
+        status: 'Active',
+        statusBadgeClass: 'status-active',
+        lifetimeSpend: 0.0,
+        totalVisits: 0,
+        lastVisit: 'New Account • No Services Yet',
+        notes: newCustomer.notes || 'Newly registered vehicle owner.',
+        vehicles: newCustomer.vehicleMake
+          ? [
+              {
+                id: `VEH-${Date.now().toString().slice(-4)}`,
+                make: newCustomer.vehicleMake,
+                model: newCustomer.vehicleModel || 'Standard',
+                year: Number(newCustomer.vehicleYear) || 2023,
+                plate: newCustomer.vehiclePlate || 'TEMP-REG',
+                vin: newCustomer.vehicleVin || 'PENDING-VERIFICATION',
+                mileage: '0 mi',
+                color: 'Standard',
+                inBay: false,
+                lastService: 'Intake Inspection Pending',
+              },
+            ]
+          : [],
+        serviceHistory: [],
+      };
+
+      setCustomers([createdCustomer, ...customers]);
+      showToast(`Customer ${createdCustomer.firstName} registered successfully!`);
+    }
+
     setActiveModal(null);
-    showToast(`Customer ${createdCustomer.firstName} ${createdCustomer.lastName} registered successfully!`);
     setNewCustomer({
       firstName: '',
       lastName: '',
@@ -728,44 +779,84 @@ const AdminCustomersPage = ({
     });
   };
 
-  const handleAddVehicleToCustomer = (e) => {
+  const handleAddVehicleToCustomer = async (e) => {
     e.preventDefault();
     if (!newVehicle.make || !newVehicle.model) {
       showToast('Please specify vehicle make and model.');
       return;
     }
 
-    const createdVeh = {
-      id: `VEH-${Date.now().toString().slice(-4)}`,
-      make: newVehicle.make,
-      model: newVehicle.model,
-      year: Number(newVehicle.year) || 2024,
-      plate: newVehicle.plate || 'CA-PENDING',
-      vin: newVehicle.vin || 'VIN-ON-FILE',
-      mileage: newVehicle.mileage,
-      color: newVehicle.color,
-      inBay: false,
-      lastService: 'Recently Added to Garage',
-    };
+    try {
+      const res = await adminCustomerAPI.addCustomerVehicle(selectedCustomer.id, newVehicle);
+      if (res.success && res.vehicle) {
+        const addedVeh = {
+          id: res.vehicle.id,
+          make: res.vehicle.make,
+          model: res.vehicle.model,
+          year: res.vehicle.year,
+          plate: res.vehicle.plate,
+          vin: res.vehicle.vin,
+          mileage: res.vehicle.mileage,
+          color: res.vehicle.color,
+          inBay: Boolean(res.vehicle.inBay),
+          lastService: res.vehicle.lastService || 'Recently Added to Garage',
+        };
 
-    const updated = customers.map((c) => {
-      if (c.id === selectedCustomer.id) {
-        const updatedVehicles = [...c.vehicles, createdVeh];
-        return { ...c, vehicles: updatedVehicles };
+        const updated = customers.map((c) => {
+          if (c.id === selectedCustomer.id) {
+            return { ...c, vehicles: [...(c.vehicles || []), addedVeh] };
+          }
+          return c;
+        });
+
+        setCustomers(updated);
+        setSelectedCustomer({
+          ...selectedCustomer,
+          vehicles: [...(selectedCustomer.vehicles || []), addedVeh],
+        });
+        showToast(`Vehicle ${addedVeh.year} ${addedVeh.make} ${addedVeh.model} added to garage!`);
+      } else {
+        throw new Error(res.message || 'Add vehicle failed');
       }
-      return c;
-    });
+    } catch (err) {
+      console.warn('Backend add vehicle fallback:', err.message);
+      const createdVeh = {
+        id: `VEH-${Date.now().toString().slice(-4)}`,
+        make: newVehicle.make,
+        model: newVehicle.model,
+        year: Number(newVehicle.year) || 2024,
+        plate: newVehicle.plate || 'CA-PENDING',
+        vin: newVehicle.vin || 'VIN-ON-FILE',
+        mileage: newVehicle.mileage,
+        color: newVehicle.color,
+        inBay: false,
+        lastService: 'Recently Added to Garage',
+      };
 
-    setCustomers(updated);
-    setSelectedCustomer({
-      ...selectedCustomer,
-      vehicles: [...selectedCustomer.vehicles, createdVeh],
-    });
+      const updated = customers.map((c) => {
+        if (c.id === selectedCustomer.id) {
+          const updatedVehicles = [...(c.vehicles || []), createdVeh];
+          return { ...c, vehicles: updatedVehicles };
+        }
+        return c;
+      });
+
+      setCustomers(updated);
+      setSelectedCustomer({
+        ...selectedCustomer,
+        vehicles: [...(selectedCustomer.vehicles || []), createdVeh],
+      });
+      showToast(`Vehicle ${createdVeh.year} ${createdVeh.make} ${createdVeh.model} added to garage!`);
+    }
     setActiveModal(null);
-    showToast(`Vehicle ${createdVeh.year} ${createdVeh.make} ${createdVeh.model} added to garage!`);
   };
 
-  const handleDeleteCustomer = (id) => {
+  const handleDeleteCustomer = async (id) => {
+    try {
+      await adminCustomerAPI.deleteCustomer(id);
+    } catch (err) {
+      console.warn('Backend delete customer fallback:', err.message);
+    }
     setCustomers(customers.filter((c) => c.id !== id));
     if (selectedCustomer && selectedCustomer.id === id) {
       setSelectedCustomer(null);

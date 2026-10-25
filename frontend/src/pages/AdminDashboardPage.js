@@ -404,7 +404,7 @@ const AdminDashboardPage = ({
                   <div className="stat-card-number">38</div>
                   <div className="stat-card-trend trend-green">
                     <DollarSign size={14} />
-                    <span>$4,650 revenue</span>
+                    <span>LKR 4,650 revenue</span>
                   </div>
                 </div>
               </div>
@@ -680,10 +680,10 @@ const AdminDashboardPage = ({
 
               <div className="admin-catalog-grid mt-3">
                 {[
-                  { title: 'Periodic Maintenance Service', price: '$89.00', time: '90 Mins' },
-                  { title: 'Brake System Repair & Pads', price: '$149.00', time: '120 Mins' },
-                  { title: 'ECU Stage 1 Tuning & Dyno', price: '$199.00', time: '60 Mins' },
-                  { title: 'Climate Control Overhaul', price: '$99.00', time: '45 Mins' },
+                  { title: 'Periodic Maintenance Service', price: 'LKR 89.00', time: '90 Mins' },
+                  { title: 'Brake System Repair & Pads', price: 'LKR 149.00', time: '120 Mins' },
+                  { title: 'ECU Stage 1 Tuning & Dyno', price: 'LKR 199.00', time: '60 Mins' },
+                  { title: 'Climate Control Overhaul', price: 'LKR 99.00', time: '45 Mins' },
                 ].map((s, idx) => (
                   <div key={idx} className="admin-catalog-card">
                     <h4>{s.title}</h4>
@@ -918,15 +918,15 @@ const AdminDashboardPage = ({
                   </div>
                   <div className="invoice-row-line">
                     <span>Parts &amp; Fluids:</span>
-                    <span>$240.00</span>
+                    <span>LKR 240.00</span>
                   </div>
                   <div className="invoice-row-line">
                     <span>Labor (2.5 hrs):</span>
-                    <span>$375.00</span>
+                    <span>LKR 375.00</span>
                   </div>
                   <div className="invoice-row-line total-bold">
                     <span>Total Settled:</span>
-                    <span className="text-blue">$615.00</span>
+                    <span className="text-blue">LKR 615.00</span>
                   </div>
 
                   <div className="modal-actions-right mt-3">
